@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="no">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parkeringstegneprogram – Oppmerking & Skiltplan</title>
+    <meta name="description"
+        content="Søk i Vegvesenets parkeringsregister, vis skiltplaner, og tegn forslag til parkeringsoppmerking.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="src/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <!-- PHASE 1: Search -->
+        <div id="search-phase" class="phase active">
+            <header class="app-header">
+                <div class="logo">
+                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                        <rect width="32" height="32" rx="8" fill="url(#logo-grad)" />
+                        <text x="16" y="22" text-anchor="middle" fill="white" font-size="18" font-weight="700">P</text>
+                        <defs>
+                            <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32">
+                                <stop stop-color="#6366f1" />
+                                <stop offset="1" stop-color="#8b5cf6" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <h1>ParkTegn</h1>
+                </div>
+                <p class="subtitle">Søk i parkeringsregisteret og tegn oppmerkingsforslag</p>
+            </header>
+
+            <div class="search-container">
+                <div class="search-box">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                    </svg>
+                    <input type="text" id="search-input" placeholder="Søk på adresse, f.eks. 'Storgata' eller 'Oslo'"
+                        value="Hoffsveien 1c" autocomplete="off">
+                    <div id="search-spinner" class="spinner hidden"></div>
+                </div>
+                <div id="search-results" class="search-results hidden"></div>
+            </div>
+
+            <div class="file-import-section">
+                <div class="divider-text"><span>eller</span></div>
+                <button id="open-file-btn" class="btn-file-import">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                        <polyline points="14,2 14,8 20,8" />
+                        <line x1="12" y1="18" x2="12" y2="12" />
+                        <polyline points="9,15 12,12 15,15" />
+                    </svg>
+                    Åpne egen fil og tegn
+                </button>
+                <p class="file-hint">Last inn bilde (PNG, JPG) eller PDF som bakgrunn</p>
+                <input type="file" id="file-input" accept="image/*,.pdf" class="hidden">
+            </div>
+
+            <div id="loading-overlay" class="loading-overlay hidden">
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <p>Henter parkeringsområder fra registeret...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PHASE 2: Result Details -->
+        <div id="result-phase" class="phase">
+            <header class="phase-header">
+                <button id="back-to-search" class="btn-back">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="m15 18-6-6 6-6" />
+                    </svg>
+                    Tilbake
+                </button>
+                <h2 id="result-title"></h2>
+            </header>
+
+            <div class="result-content">
+                <div class="info-grid" id="info-grid"></div>
+
+                <!-- Source chooser: Skiltplan vs Satellittbilde -->
+                <div class="source-chooser" id="source-chooser">
+                    <h3>Velg bakgrunn for tegning</h3>
+                    <div class="source-cards">
+                        <button class="source-card" id="source-skiltplan">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.5">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                                <polyline points="14,2 14,8 20,8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                            </svg>
+                            <span class="source-title">📄 Skiltplan fra registeret</span>
+                            <span class="source-desc">Tegn på eksisterende skiltplan-PDF</span>
+                        </button>
+                        <button class="source-card" id="source-satellite">
+                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M2 12h20" />
+                                <path
+                                    d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+                            </svg>
+                            <span class="source-title">🛰️ Satellittbilde fra kart</span>
+                            <span class="source-desc">Tegn på flyfoto av området</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sheets-section hidden" id="sheets-section">
+                    <h3>Skiltplan – Velg ark</h3>
+                    <p class="sheets-hint">Velg arkene du ønsker å tegne på. Du kan velge flere.</p>
+                    <div id="sheets-container" class="sheets-grid"></div>
+                    <div id="sheets-loading" class="sheets-loading hidden">
+                        <div class="loading-spinner"></div>
+                        <p>Laster skiltplan...</p>
+                    </div>
+                    <div id="no-skiltplan" class="no-skiltplan hidden">
+                        <p>Ingen skiltplan tilgjengelig for dette parkeringsområdet.</p>
+                    </div>
+                </div>
+
+                <button id="start-drawing" class="btn-primary btn-large" disabled>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                        <path d="M2 2l7.586 7.586" />
+                    </svg>
+                    Start tegning
+                </button>
+            </div>
+        </div>
+
+        <!-- PHASE 3: Drawing -->
+        <div id="drawing-phase" class="phase">
+            <div class="drawing-layout">
+                <!-- Toolbar -->
+                <div class="toolbar" id="toolbar">
+                    <div class="toolbar-section">
+                        <button id="back-to-result" class="toolbar-btn" title="Tilbake">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="m15 18-6-6 6-6" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <div class="toolbar-section">
+                        <h4>Verktøy</h4>
+                        <button class="toolbar-btn tool-btn active" data-tool="select" title="Velg / Flytt (V)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="parking" title="Parkeringsplass (P)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" /><text x="12" y="17"
+                                    text-anchor="middle" fill="currentColor" font-size="12" font-weight="700"
+                                    stroke="none">P</text>
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="crosswalk" title="Fotgjengerfelt (F)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="3" y="6" width="18" height="12" />
+                                <line x1="7" y1="6" x2="7" y2="18" />
+                                <line x1="11" y1="6" x2="11" y2="18" />
+                                <line x1="15" y1="6" x2="15" y2="18" />
+                                <line x1="19" y1="6" x2="19" y2="18" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="arrow" title="Pil – 5m lang, 75cm pilhode (A)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <line x1="5" y1="19" x2="19" y2="5" />
+                                <polyline points="10,5 19,5 19,14" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="lane-single" title="Enkel kjørelinje">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5">
+                                <line x1="12" y1="2" x2="12" y2="22" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="lane-double"
+                            title="Dobbel kjørelinje (10cm mellom)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <line x1="10" y1="2" x2="10" y2="22" />
+                                <line x1="14" y1="2" x2="14" y2="22" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="eraser" title="Fjern element (E)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.8-9.8c1-1 2.5-1 3.4 0l5.7 5.7c1 1 1 2.5 0 3.4L13 21" />
+                                <path d="M22 21H7" />
+                                <path d="m5 11 9 9" />
+                            </svg>
+                        </button>
+                        <button id="rotate-btn" class="toolbar-btn" title="Roter valgt element 90° (R)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                                <path d="M21 3v5h-5" />
+                            </svg>
+                        </button>
+                        <button id="helperline-btn" class="toolbar-btn active" title="Vis/skjul hjelpelinjer (6.5m)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-dasharray="4 3">
+                                <line x1="12" y1="2" x2="12" y2="22" />
+                                <line x1="6" y1="8" x2="18" y2="8" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <div class="toolbar-section">
+                        <h4>Symboler</h4>
+                        <button class="toolbar-btn tool-btn" data-tool="symbol" data-symbol="MC" title="MC-parkering">
+                            <span class="symbol-label">MC</span>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="symbol" data-symbol="Sykkel"
+                            title="Sykkelparkering">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="18.5" cy="17.5" r="3.5" />
+                                <circle cx="5.5" cy="17.5" r="3.5" />
+                                <circle cx="15" cy="5" r="1" />
+                                <path d="M12 17.5V14l-3-3 4-3 2 3h2" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="symbol" data-symbol="El-bil"
+                            title="El-bil lading">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="symbol" data-symbol="HC" title="HC-parkering">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="6" r="2" />
+                                <path d="M10 22v-6.5a3.5 3.5 0 1 1 7 0" />
+                                <path d="M10 12h4" />
+                                <path d="M10 10v4" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="arrow-left"
+                            title="Svingpil venstre – dra for retning">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 20v-12" />
+                                <path d="M12 8H6" />
+                                <polyline points="9,5 6,8 9,11" fill="currentColor" stroke="none" />
+                            </svg>
+                        </button>
+                        <button class="toolbar-btn tool-btn" data-tool="arrow-right"
+                            title="Svingpil høyre – dra for retning">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 20v-12" />
+                                <path d="M12 8h6" />
+                                <polyline points="15,5 18,8 15,11" fill="currentColor" stroke="none" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <div class="toolbar-section">
+                        <h4>Kalibrering</h4>
+                        <button id="calibrate-btn" class="toolbar-btn tool-btn" data-tool="calibrate"
+                            title="Kalibrer skala (K)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z" />
+                                <path d="m14.5 12.5 2-2" />
+                                <path d="m11.5 9.5 2-2" />
+                                <path d="m8.5 6.5 2-2" />
+                            </svg>
+                        </button>
+                        <div id="scale-info" class="scale-info">
+                            <span class="scale-label">Skala:</span>
+                            <span id="scale-value" class="scale-value">Ikke kalibrert</span>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <div class="toolbar-section">
+                        <h4>Farge</h4>
+                        <div class="color-picker">
+                            <button class="color-swatch active" data-color="#FFFFFF" style="background:#FFFFFF"
+                                title="Hvit"></button>
+                            <button class="color-swatch" data-color="#FFD700" style="background:#FFD700"
+                                title="Gul"></button>
+                            <button class="color-swatch" data-color="#3B82F6" style="background:#3B82F6"
+                                title="Blå"></button>
+                            <button class="color-swatch" data-color="#EF4444" style="background:#EF4444"
+                                title="Rød"></button>
+                            <button class="color-swatch" data-color="#22C55E" style="background:#22C55E"
+                                title="Grønn"></button>
+                        </div>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <div class="toolbar-section">
+                        <h4>Handlinger</h4>
+                        <button id="undo-btn" class="toolbar-btn" title="Angre (Ctrl+Z)" disabled>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M3 7v6h6" />
+                                <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+                            </svg>
+                        </button>
+                        <button id="redo-btn" class="toolbar-btn" title="Gjør om (Ctrl+Y)" disabled>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 7v6h-6" />
+                                <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+                            </svg>
+                        </button>
+                        <button id="delete-btn" class="toolbar-btn" title="Slett valgt element (Del)" disabled>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                        </button>
+                        <button id="zoom-in-btn" class="toolbar-btn" title="Zoom inn (+)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="11" cy="11" r="8" />
+                                <path d="m21 21-4.3-4.3" />
+                                <path d="M11 8v6" />
+                                <path d="M8 11h6" />
+                            </svg>
+                        </button>
+                        <button id="zoom-out-btn" class="toolbar-btn" title="Zoom ut (-)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="11" cy="11" r="8" />
+                                <path d="m21 21-4.3-4.3" />
+                                <path d="M8 11h6" />
+                            </svg>
+                        </button>
+                        <button id="zoom-fit-btn" class="toolbar-btn" title="Tilpass visning">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M15 3h6v6" />
+                                <path d="M9 21H3v-6" />
+                                <path d="M21 3l-7 7" />
+                                <path d="M3 21l7-7" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <div class="toolbar-section">
+                        <button id="export-btn" class="btn-primary btn-export" title="Eksporter som PNG">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7,10 12,15 17,10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg>
+                            Eksporter
+                        </button>
+                        <button id="price-quote-btn" class="btn-primary btn-price" title="Lag pristilbud">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                            </svg>
+                            Pristilbud
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Canvas Area -->
+                <div class="canvas-container" id="canvas-container">
+                    <canvas id="drawing-canvas"></canvas>
+
+                    <!-- Calibration overlay -->
+                    <div id="calibration-overlay" class="calibration-overlay hidden">
+                        <div class="calibration-guide">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path
+                                    d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z" />
+                            </svg>
+                            <p id="calibration-text">Klikk på to ender av en parkeringsplass for å kalibrere (= 5 meter)
+                            </p>
+                            <button id="cancel-calibration" class="btn-secondary btn-small">Avbryt</button>
+                        </div>
+                    </div>
+
+                    <!-- Sheet tabs + Street View -->
+                    <div class="canvas-bottom-bar">
+                        <div id="sheet-tabs" class="sheet-tabs"></div>
+                        <button id="street-view-btn" class="street-view-btn" title="Se tegningen i Street View">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="5" r="3" />
+                                <path d="M12 8v8" />
+                                <path d="M8 21l4-5 4 5" />
+                            </svg>
+                            Street View
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Street View Visualization Modal -->
+    <div id="viz-modal" class="viz-modal hidden">
+        <div class="viz-header">
+            <h2>🗺️ Street View</h2>
+            <div class="viz-controls">
+                <label>Retning: <input type="range" id="viz-heading" min="0" max="359" value="0" step="15"><span
+                        id="viz-heading-label">0°</span></label>
+                <label>Tegning: <input type="range" id="viz-opacity" min="0" max="100" value="60" step="5">%</label>
+                <label>Størrelse: <input type="range" id="viz-size" min="20" max="100" value="40" step="5">%</label>
+            </div>
+            <button id="viz-gmaps" class="viz-gmaps-btn" title="Åpne i Google Maps">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+            </button>
+            <button id="viz-close" class="viz-close-btn">&times;</button>
+        </div>
+        <div class="viz-streetview-container" id="viz-streetview-container">
+            <img id="viz-streetview-img" class="viz-streetview-img" alt="Street View">
+            <div class="viz-loading" id="viz-loading">Laster Street View...</div>
+            <div class="viz-overlay-wrapper" id="viz-overlay-wrapper">
+                <canvas id="viz-canvas" class="viz-overlay-canvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Price Quote Modal -->
+    <div id="price-modal" class="price-modal hidden">
+        <div class="price-modal-content">
+            <div class="price-modal-header">
+                <h2>💰 Pristilbud</h2>
+                <button id="price-close" class="viz-close-btn">&times;</button>
+            </div>
+
+            <div class="price-modal-body">
+                <!-- Excel upload -->
+                <div class="price-upload-section" id="price-upload-section">
+                    <div class="price-upload-box" id="price-upload-box">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                            <polyline points="14,2 14,8 20,8" />
+                            <line x1="12" y1="18" x2="12" y2="12" />
+                            <polyline points="9,15 12,12 15,15" />
+                        </svg>
+                        <p>Last opp Excel-fil med prisliste</p>
+                        <span class="price-upload-hint">.xlsx, .xls</span>
+                        <input type="file" id="price-file-input" accept=".xlsx,.xls,.csv" class="hidden">
+                    </div>
+                    <div id="price-file-name" class="price-file-name hidden"></div>
+                </div>
+
+                <!-- Price mode selector -->
+                <div class="price-mode-section hidden" id="price-mode-section">
+                    <h4>Velg prisnivå</h4>
+                    <div class="price-mode-options" id="price-mode-options"></div>
+                </div>
+
+                <!-- Element count summary -->
+                <div class="price-summary-section">
+                    <h4>Oppsummering av elementer</h4>
+                    <table class="price-table" id="price-table">
+                        <thead>
+                            <tr>
+                                <th>Element</th>
+                                <th>Antall</th>
+                                <th>Enhetspris</th>
+                                <th>Totalpris</th>
+                                <th>Kobling</th>
+                            </tr>
+                        </thead>
+                        <tbody id="price-table-body"></tbody>
+                        <tfoot>
+                            <tr class="price-total-row">
+                                <td colspan="3"><strong>Totalt</strong></td>
+                                <td id="price-total-amount"><strong>kr 0,-</strong></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <!-- Manual product matching -->
+                <div class="price-matching-hint hidden" id="price-matching-hint">
+                    <p>⚠️ Noen elementer ble ikke automatisk koblet til prislisten. Bruk nedtrekksmenyene for å koble
+                        dem manuelt.</p>
+                </div>
+            </div>
+
+            <div class="price-modal-footer">
+                <button id="price-print-btn" class="btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 9V2h12v7" />
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <rect x="6" y="14" width="12" height="8" />
+                    </svg>
+                    Skriv ut tilbud
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="src/main.js?v=29"></script>
+</body>
+
+</html>

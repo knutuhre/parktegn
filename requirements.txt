@@ -1,0 +1,3 @@
+# ParkTegn dependencies
+# Pillow is used for stitching satellite map tiles
+Pillow
