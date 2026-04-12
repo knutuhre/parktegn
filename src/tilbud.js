@@ -4,8 +4,8 @@
  */
 
 // ===== Configuration =====
-const PRICE_BASE_YEAR = 2026;           // Year the prices are from
-const ANNUAL_ADJUSTMENT_PCT = 3;        // Annual price increase percentage
+const PRICE_BASE_YEAR = 2025;           // Satt til 2025 slik at de nye prisene får 1 års KPI-justering lagt på i år
+const ANNUAL_ADJUSTMENT_PCT = 3.5;      // Konsumprisindeks / Annual price increase percentage
 const CURRENT_YEAR = new Date().getFullYear();
 
 // Calculate cumulative adjustment factor
