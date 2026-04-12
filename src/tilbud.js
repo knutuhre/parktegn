@@ -1582,10 +1582,17 @@ function parseEmailTextToProducts(text) {
         plassCount += parseInt(match[1]);
     }
 
-    const hcRegex = /(\d+)\s*(?:hc|handicap|rullestol|elbil)/gi;
+    const hcRegex = /(\d+)\s*(?:hc|handicap|rullestol)(?:\s*(?:plass|symbol|skilt))?/gi;
     let hcCount = 0;
     while ((match = hcRegex.exec(text)) !== null) {
         hcCount += parseInt(match[1]);
+    }
+
+    // Separate regex for elbil/sykkel/MC symbols (maps to "symboler, HC/elbil/MC/sykkel")
+    const symbolRegex = /(\d+)\s*(?:elbil|el-bil|sykkel|mc|motorsykkel)(?:\s*(?:symbol|skilt))?/gi;
+    let symbolCount = 0;
+    while ((match = symbolRegex.exec(text)) !== null) {
+        symbolCount += parseInt(match[1]);
     }
 
     const riggCount = 1;
@@ -1644,18 +1651,21 @@ function parseEmailTextToProducts(text) {
     // Add plasser
     if (defaultMaterial === 'maling') {
         addProductByBestGuess(['maling', 'per plass', 'nymerking'], plassCount);
-        addProductByBestGuess(['maling', 'hc'], hcCount);
+        addProductByBestGuess(['maling', 'symboler', 'hc'], hcCount);      // HC symbols
+        addProductByBestGuess(['maling', 'symboler', 'hc'], symbolCount);   // elbil/sykkel/MC → same product
         addProductByBestGuess(['maling', 'rigg', 'maskiner'], riggCount);
     } else {
         addProductByBestGuess(['termoplast', 'per plass'], plassCount);
-        addProductByBestGuess(['termoplast', 'symbol', 'hc'], hcCount);
+        addProductByBestGuess(['termoplast', 'symbol', 'hc'], hcCount);     // HC symbols
+        addProductByBestGuess(['termoplast', 'symbol', 'hc'], symbolCount); // elbil/sykkel/MC → same product
         addProductByBestGuess(['termoplast', 'rigg', 'maskiner'], riggCount);
     }
 
     if (hasChanged) {
         renderProducts();
         updateSummary();
-        alert(`🎉 AI Tolkning fullført:\n\nMateriale: ${defaultMaterial}\nPlasser funnet: ${plassCount}\nHC-symboler funnet: ${hcCount}\nRigg lagt til.`);
+        const symbolInfo = symbolCount > 0 ? `\nElbil/sykkel/MC-symboler funnet: ${symbolCount}` : '';
+        alert(`🎉 AI Tolkning fullført:\n\nMateriale: ${defaultMaterial}\nPlasser funnet: ${plassCount}\nHC-symboler funnet: ${hcCount}${symbolInfo}\nRigg lagt til.`);
         
         // Show swap button and setup logic
         const swapBtn = document.getElementById('ai-swap-material-btn');
