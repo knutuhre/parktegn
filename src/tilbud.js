@@ -638,6 +638,134 @@ function setupActions() {
             handleSendEmail();
         });
     }
+
+    // P-register search button
+    const pRegisterBtn = $('#search-pregister-btn');
+    if (pRegisterBtn) {
+        pRegisterBtn.addEventListener('click', async () => {
+            await handlePRegisterSearch();
+        });
+    }
+
+    // Attachments input listener
+    const attachmentsInput = $('#quote-attachments');
+    if (attachmentsInput) {
+        attachmentsInput.addEventListener('change', (e) => {
+            const count = e.target.files.length;
+            const countSpan = $('#quote-attachments-count');
+            if (countSpan) {
+                if (count === 0) {
+                    countSpan.textContent = '(Ingen valgt)';
+                    countSpan.style.color = '#64748b';
+                } else if (count === 1) {
+                    countSpan.textContent = `(1 fil valg: ${e.target.files[0].name})`;
+                    countSpan.style.color = '#059669'; // Green success
+                } else {
+                    countSpan.textContent = `(${count} filer valgt)`;
+                    countSpan.style.color = '#059669';
+                }
+            }
+        });
+    }
+}
+
+async function handlePRegisterSearch() {
+    const input = $('#customer-project');
+    const query = input?.value?.trim();
+    if (!query) {
+        alert('Skriv inn en adresse eller et prosjektnavn i adressefeltet for å søke i P-registeret.');
+        return;
+    }
+
+    try {
+        const btn = $('#search-pregister-btn');
+        const oldText = btn.innerHTML;
+        btn.innerHTML = '⏳';
+        
+        const vegvesen = await import('./api/vegvesen.js?v=test13');
+        const hits = await vegvesen.searchByAddress(query);
+
+        btn.innerHTML = oldText;
+
+        if (hits.length === 0) {
+            alert('Fant ingen treff i Parkeringsregisteret på denne adressen.');
+            return;
+        }
+
+        let areaInfo = null;
+        if (hits.length === 1) {
+            areaInfo = vegvesen.extractAreaInfo(hits[0]);
+        } else {
+            // Multiple hits prompt
+            let promptText = `Fant ${hits.length} treff. Velg nummeret for anlegget du vil bruke:\n\n`;
+            hits.slice(0, 9).forEach((h, i) => {
+                const v = h.aktivVersjon || h;
+                const navn = v.navn || 'Ukjent';
+                promptText += `${i + 1}: ${navn} (${v.adresse || 'ingen adr'})\n`;
+            });
+            const valgStr = prompt(promptText + '\nSkriv inn nummeret (1-' + Math.min(hits.length, 9) + '):');
+            if (!valgStr) return;
+            const valgNum = parseInt(valgStr) - 1;
+            if (valgNum >= 0 && valgNum < hits.length) {
+                areaInfo = vegvesen.extractAreaInfo(hits[valgNum]);
+            }
+        }
+
+        if (areaInfo) {
+            applyParkingAreaToQuote(areaInfo);
+        }
+
+    } catch (e) {
+        console.error(e);
+        alert('Feil ved P-register søk: ' + e.message);
+        $('#search-pregister-btn').innerHTML = '🚗';
+    }
+}
+
+function applyParkingAreaToQuote(areaInfo) {
+    if (!areaInfo) return;
+    
+    let avgiftsbelagte = 0;
+    let avgiftsfrie = 0;
+    let hc = 0;
+    
+    if (typeof areaInfo.antallAvgiftsbelagte === 'number') avgiftsbelagte = areaInfo.antallAvgiftsbelagte;
+    if (typeof areaInfo.antallAvgiftsfrie === 'number') avgiftsfrie = areaInfo.antallAvgiftsfrie;
+    if (typeof areaInfo.antallForflytningshemmede === 'number') hc = areaInfo.antallForflytningshemmede;
+
+    const totP = avgiftsbelagte + avgiftsfrie;
+    let changesMade = false;
+
+    // By default Maling, unless swapped to Termoplast
+    const mapString = localStorage.getItem('ai_product_mapping');
+    const isTermoplast = (mapString && mapString.includes('TERMOPLAST'));
+    
+    // IDs matching the selected material
+    const pPlassID = isTermoplast ? 3203 : 3404; // 10cm linje, per plass
+    const hcSymbolID = isTermoplast ? 3206 : 3406; // Symbol, HC
+
+    if (totP > 0) {
+        selectedProducts[pPlassID] = { qty: (selectedProducts[pPlassID]?.qty || 0) + totP };
+        changesMade = true;
+    }
+    
+    if (hc > 0) {
+        selectedProducts[hcSymbolID] = { qty: (selectedProducts[hcSymbolID]?.qty || 0) + hc };
+        changesMade = true;
+    }
+
+    if (changesMade) {
+        renderProducts();
+        updateSummary();
+        alert(`La til ${totP} P-plasser og ${hc} HC-plasser hentet automatisk fra parkeringsregisteret: "${areaInfo.navn}"`);
+        
+        const projInput = $('#customer-project');
+        if (projInput && (!projInput.value || projInput.value.length < 5)) {
+            projInput.value = areaInfo.navn;
+        }
+    } else {
+        alert(`Fant registeret "${areaInfo.navn}", men det stod foreløpig 0 P-plasser og 0 HC-plasser i Vegvesenets database.`);
+    }
 }
 
 // ===== Email Panel =====
@@ -1380,6 +1508,27 @@ async function handleSendEmail() {
 
         if (sendBtn) sendBtn.textContent = '⏳ Sender...';
 
+        // Read extra custom attachments
+        const fileInput = $('#quote-attachments');
+        let customAttachments = [];
+        if (fileInput && fileInput.files.length > 0) {
+            if (sendBtn) sendBtn.textContent = '⏳ Laster vedlegg...';
+            // Convert all to base64
+            for (let i = 0; i < fileInput.files.length; i++) {
+                const f = fileInput.files[i];
+                const r = new FileReader();
+                const b64 = await new Promise((resolve) => {
+                    r.onload = () => resolve(r.result.split(',')[1]);
+                    r.readAsDataURL(f);
+                });
+                customAttachments.push({
+                    filename: f.name,
+                    base64: b64,
+                    contentType: f.type
+                });
+            }
+        }
+
         // Send via backend
         const bodyText = `Hei ${customerName},\n\nTakk for din henvendelse.\n\nVedlagt finner du vårt pristilbud for det forespurte oppmerkingsarbeidet.\n\nDette tilbudet er basert på en maskinell behandling av din forespørsel. Dersom det er mangler eller feil, gi oss beskjed så korrigerer vi tilbudet.\n\nTilbudet er gyldig i 30 dager.\n\nMed vennlig hilsen\nChristiania Oppmerking AS\nTlf: +47 40 00 42 54\npost@christianiaoppmerking.no`;
 
@@ -1388,6 +1537,8 @@ async function handleSendEmail() {
         if (storedPwd) {
             reqHeaders['X-Mail-Password'] = storedPwd;
         }
+
+        if (sendBtn) sendBtn.textContent = '⏳ Sender e-post...';
 
         const resp = await fetch('/mail/send', {
             method: 'POST',
@@ -1398,7 +1549,8 @@ async function handleSendEmail() {
                 body_text: bodyText,
                 pdf_base64: pdfBase64,
                 pdf_filename: getQuoteFilename(),
-                bcc_email: sendCopy ? 'post@christianiaoppmerking.no' : ''
+                bcc_email: sendCopy ? 'post@christianiaoppmerking.no' : '',
+                custom_attachments: customAttachments
             })
         });
 

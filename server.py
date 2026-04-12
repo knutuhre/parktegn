@@ -351,6 +351,25 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             pdf_part.add_header('Content-Disposition', 'attachment', filename=pdf_filename)
             msg.attach(pdf_part)
 
+            # Custom attachments
+            custom_attachments = data.get('custom_attachments', [])
+            for file_obj in custom_attachments:
+                try:
+                    att_filename = file_obj.get('filename', 'vedlegg')
+                    att_b64 = file_obj.get('base64', '')
+                    att_type = file_obj.get('contentType', 'application/octet-stream')
+                    
+                    if att_b64:
+                        att_bytes = base64.b64decode(att_b64)
+                        # We extract the subtype from content-type if available
+                        subtype = att_type.split('/')[-1] if '/' in att_type else 'octet-stream'
+                        
+                        part = MIMEApplication(att_bytes, _subtype=subtype)
+                        part.add_header('Content-Disposition', 'attachment', filename=att_filename)
+                        msg.attach(part)
+                except Exception as e:
+                    print(f"Advarsel: Kunne ikke legge ved {file_obj.get('filename')}: {e}")
+
             # Send via One.com SMTP
             print(f'  📧 Sender e-post til {to_email}...')
             with smtplib.SMTP_SSL('send.one.com', 465) as smtp:
