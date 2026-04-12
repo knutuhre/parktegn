@@ -650,31 +650,25 @@ function setupActions() {
                     return;
                 }
 
-                let matchCount = 0;
-                for (const p of PRODUCTS) {
-                    const pNameLower = p.name.toLowerCase();
-                    const match = excelList.find(x => {
-                        const xName = x.product.toLowerCase();
-                        if (xName.length < 3) return false;
-                        return xName === pNameLower || pNameLower.includes(xName) || xName.includes(pNameLower.replace('maling, ', '').replace('termoplast, ', ''));
-                    });
-                    
-                    if (match) {
-                        const newPrice = match.customerPrice > 0 ? match.customerPrice : 
-                                        (match.discountPrice > 0 ? match.discountPrice : match.basePrice);
-                        if (newPrice > 0) {
-                            p.price = newPrice;
-                            matchCount++;
-                        }
-                    }
+                // Ask if they want to bind this to a specific customer
+                const custName = prompt("Hvilken kunde gjelder denne prislisten for?\n(La stå blank for å bare bruke den midlertidig her og nå)", "Park Nordic");
+                
+                if (custName && custName.trim() !== "") {
+                    // Save to local storage for future automatic loads
+                    const cleanName = custName.trim().toLowerCase();
+                    localStorage.setItem('tilbud_custom_prices_' + cleanName, JSON.stringify(excelList));
+                    alert(`✅ Prislisten ble lagret for kunden "${custName}". Prisene vil automatisk bli tatt i bruk hver gang dette kundenavnet blir fylt inn i "Kundenavn"-feltet.`);
                 }
+
+                // Apply it now
+                let matchCount = applyCustomPricesToProducts(excelList);
 
                 renderProducts();
                 updateSummary();
                 
-                alert(`Lest inn Excel: Oppdaterte ${matchCount} produkter med priser fra "${file.name}".`);
+                const showName = (custName && custName.trim() !== "") ? custName : file.name;
                 if (priceSourceLabel) {
-                    priceSourceLabel.textContent = file.name;
+                    priceSourceLabel.textContent = `Priser: ${showName}`;
                     priceSourceLabel.style.color = '#059669';
                 }
 
@@ -686,6 +680,17 @@ function setupActions() {
                 btnUploadPrices.disabled = false;
                 priceExcelInput.value = '';
             }
+        });
+    }
+
+    // Customer Name Listener for Auto-pricing
+    const customerNameInput = $('#customer-name');
+    if (customerNameInput) {
+        customerNameInput.addEventListener('input', (e) => {
+            handleCustomerNameChange(e.target.value);
+        });
+        customerNameInput.addEventListener('change', (e) => {
+            handleCustomerNameChange(e.target.value);
         });
     }
 
@@ -743,6 +748,72 @@ function setupActions() {
                 }
             }
         });
+    }
+}
+
+function applyCustomPricesToProducts(excelList) {
+    let matchCount = 0;
+    for (const p of PRODUCTS) {
+        const pNameLower = p.name.toLowerCase();
+        const match = excelList.find(x => {
+            const xName = x.product.toLowerCase();
+            if (xName.length < 3) return false;
+            return xName === pNameLower || pNameLower.includes(xName) || xName.includes(pNameLower.replace('maling, ', '').replace('termoplast, ', ''));
+        });
+        
+        if (match) {
+            const newPrice = match.customerPrice > 0 ? match.customerPrice : 
+                            (match.discountPrice > 0 ? match.discountPrice : match.basePrice);
+            if (newPrice > 0) {
+                p.price = newPrice;
+                matchCount++;
+            }
+        }
+    }
+    return matchCount;
+}
+
+function handleCustomerNameChange(name) {
+    const cleanName = name.trim().toLowerCase();
+    const stored = localStorage.getItem('tilbud_custom_prices_' + cleanName);
+    
+    const priceSourceLabel = $('#price-source-label');
+
+    if (stored) {
+        try {
+            const excelList = JSON.parse(stored);
+            applyCustomPricesToProducts(excelList);
+            // Re-render
+            renderProducts();
+            updateSummary();
+            if (priceSourceLabel) {
+                priceSourceLabel.textContent = `Priser: ${name.trim()}`;
+                priceSourceLabel.style.color = '#059669';
+            }
+        } catch(e) {
+            console.error('Kunne ikke laste lagrede kundepriser', e);
+        }
+    } else {
+        // Reset to standard prices
+        let changed = false;
+        for (const p of PRODUCTS) {
+            const raw = PRODUCTS_RAW.find(r => r.id === p.id);
+            if (raw) {
+                const stdPrice = Math.round(raw.price * ADJUSTMENT_FACTOR);
+                if (p.price !== stdPrice) {
+                    p.price = stdPrice;
+                    changed = true;
+                }
+            }
+        }
+        if (changed) {
+            renderProducts();
+            updateSummary();
+            if (priceSourceLabel) {
+                priceSourceLabel.textContent = 'Standard Priser';
+                priceSourceLabel.style.color = '#475569';
+            }
+        }
     }
 }
 
