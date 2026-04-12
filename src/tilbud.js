@@ -16,74 +16,74 @@ const ADJUSTMENT_FACTOR = Math.pow(1 + ANNUAL_ADJUSTMENT_PCT / 100, yearsDiff);
 // Prices are 2026 eks. MVA — adjusted to current year automatically
 const PRODUCTS_RAW = [
     // --- Termoplast ---
-    { id: 3202, cat: 'Termoplast',     name: 'Termoplast, 10cm linje, HVIT',                    unit: 'lm',       price: 43 },
-    { id: 3203, cat: 'Termoplast',     name: 'Termoplast, 10cm linje, HVIT, per plass',          unit: 'plass',    price: 310 },
-    { id: 3204, cat: 'Termoplast',     name: 'Termoplast, Pil, Rett',                            unit: 'stk',      price: 1320 },
-    { id: 3205, cat: 'Termoplast',     name: 'Termoplast, Pil, Sving',                           unit: 'stk',      price: 1430 },
-    { id: 3206, cat: 'Termoplast',     name: 'Termoplast, Symbol, HC',                           unit: 'stk',      price: 1370 },
-    { id: 3207, cat: 'Termoplast',     name: 'Termoplast, 50cm, Gangfelt',                       unit: 'lm',       price: 182 },
-    { id: 3208, cat: 'Termoplast',     name: 'Termoplast, 50x50cm, Fartshump',                   unit: 'stk',      price: 100 },
-    { id: 3209, cat: 'Termoplast',     name: 'Termoplast, Symbol, Vikelinje',                    unit: 'stk',      price: 248 },
-    { id: 3210, cat: 'Termoplast',     name: 'Termoplast, per kvm',                              unit: 'kvm',      price: 345 },
-    { id: 3211, cat: 'Termoplast',     name: 'Termoplast, BUSS/TAXI',                            unit: 'stk',      price: 2950 },
-    { id: 3212, cat: 'Termoplast',     name: 'Termoplast, 20cm linje, HVIT',                     unit: 'lm',       price: 84 },
-    { id: 3213, cat: 'Termoplast',     name: 'Termoplast, 25cm linje, HVIT',                     unit: 'lm',       price: 126 },
-    { id: 3214, cat: 'Termoplast',     name: 'Termoplast, Nummer / Bokstaver (På gulv)',          unit: 'stk',      price: 460 },
-    { id: 3281, cat: 'Termoplast',     name: 'Termoplast, Formerking',                           unit: 'time',     price: 1850 },
-    { id: 3291, cat: 'Termoplast',     name: 'Termoplast, Rigg, maskiner og utstyr',             unit: 'oppmøte',  price: 7050 },
+    { id: 3202, cat: 'Termoplast', name: 'Termoplast, 10cm linje, HVIT', unit: 'lm', price: 43 },
+    { id: 3203, cat: 'Termoplast', name: 'Termoplast, 10cm linje, HVIT, per plass', unit: 'plass', price: 310 },
+    { id: 3204, cat: 'Termoplast', name: 'Termoplast, Pil, Rett', unit: 'stk', price: 1320 },
+    { id: 3205, cat: 'Termoplast', name: 'Termoplast, Pil, Sving', unit: 'stk', price: 1430 },
+    { id: 3206, cat: 'Termoplast', name: 'Termoplast, Symbol, HC', unit: 'stk', price: 1370 },
+    { id: 3207, cat: 'Termoplast', name: 'Termoplast, 50cm, Gangfelt', unit: 'lm', price: 182 },
+    { id: 3208, cat: 'Termoplast', name: 'Termoplast, 50x50cm, Fartshump', unit: 'stk', price: 100 },
+    { id: 3209, cat: 'Termoplast', name: 'Termoplast, Symbol, Vikelinje', unit: 'stk', price: 248 },
+    { id: 3210, cat: 'Termoplast', name: 'Termoplast, per kvm', unit: 'kvm', price: 345 },
+    { id: 3211, cat: 'Termoplast', name: 'Termoplast, BUSS/TAXI', unit: 'stk', price: 2950 },
+    { id: 3212, cat: 'Termoplast', name: 'Termoplast, 20cm linje, HVIT', unit: 'lm', price: 84 },
+    { id: 3213, cat: 'Termoplast', name: 'Termoplast, 25cm linje, HVIT', unit: 'lm', price: 126 },
+    { id: 3214, cat: 'Termoplast', name: 'Termoplast, Nummer / Bokstaver (På gulv)', unit: 'stk', price: 460 },
+    { id: 3281, cat: 'Termoplast', name: 'Termoplast, Formerking', unit: 'time', price: 1850 },
+    { id: 3291, cat: 'Termoplast', name: 'Termoplast, Rigg, maskiner og utstyr', unit: 'oppmøte', price: 7050 },
 
     // --- Prefabrikert ---
-    { id: 3301, cat: 'Prefabrikert',   name: 'Prefabrikert, 10cm linje, HVIT',                   unit: 'lm',       price: 130 },
-    { id: 3302, cat: 'Prefabrikert',   name: 'Prefabrikert, 10cm linje, GUL',                    unit: 'lm',       price: 135 },
-    { id: 3303, cat: 'Prefabrikert',   name: 'Prefabrikert, Pil, Rett',                          unit: 'stk',      price: 1320 },
-    { id: 3304, cat: 'Prefabrikert',   name: 'Prefabrikert, Pil, Sving',                         unit: 'stk',      price: 1430 },
-    { id: 3305, cat: 'Prefabrikert',   name: 'Prefabrikert, 50cm, Gangfelt',                     unit: 'lm',       price: 172 },
-    { id: 3306, cat: 'Prefabrikert',   name: 'Prefabrikert, Symbol, HC/elbil/MC/sykkel',         unit: 'stk',      price: 1420 },
-    { id: 3307, cat: 'Prefabrikert',   name: 'Prefabrikert, Symbol, Vikelinje 1022',             unit: 'stk',      price: 248 },
-    { id: 3391, cat: 'Prefabrikert',   name: 'Prefabrikert, Rigg, maskiner og utstyr',           unit: 'oppmøte',  price: 3000 },
+    { id: 3301, cat: 'Prefabrikert', name: 'Prefabrikert, 10cm linje, HVIT', unit: 'lm', price: 130 },
+    { id: 3302, cat: 'Prefabrikert', name: 'Prefabrikert, 10cm linje, GUL', unit: 'lm', price: 135 },
+    { id: 3303, cat: 'Prefabrikert', name: 'Prefabrikert, Pil, Rett', unit: 'stk', price: 1320 },
+    { id: 3304, cat: 'Prefabrikert', name: 'Prefabrikert, Pil, Sving', unit: 'stk', price: 1430 },
+    { id: 3305, cat: 'Prefabrikert', name: 'Prefabrikert, 50cm, Gangfelt', unit: 'lm', price: 172 },
+    { id: 3306, cat: 'Prefabrikert', name: 'Prefabrikert, Symbol, HC/elbil/MC/sykkel', unit: 'stk', price: 1420 },
+    { id: 3307, cat: 'Prefabrikert', name: 'Prefabrikert, Symbol, Vikelinje 1022', unit: 'stk', price: 248 },
+    { id: 3391, cat: 'Prefabrikert', name: 'Prefabrikert, Rigg, maskiner og utstyr', unit: 'oppmøte', price: 3000 },
 
     // --- Maling ---
-    { id: 4202, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, remerking',               unit: 'lm',       price: 19 },
-    { id: 4203, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, nymerking (inkl. oppmåling)', unit: 'lm',   price: 27 },
-    { id: 4204, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, per plass, remerking',    unit: 'plass',    price: 137 },
-    { id: 4205, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, per plass, nymerking',    unit: 'plass',    price: 184 },
-    { id: 4206, cat: 'Maling',        name: 'Maling, 10cm linje, GUL, remerking',                unit: 'lm',       price: 22 },
-    { id: 4207, cat: 'Maling',        name: 'Maling, 10cm linje, GUL, nymerking (inkl. oppmåling)', unit: 'lm',    price: 26 },
-    { id: 4208, cat: 'Maling',        name: 'Maling, symboler, HC/elbil/MC/sykkel',              unit: 'stk',      price: 578 },
-    { id: 4209, cat: 'Maling',        name: 'Maling, Pil, Rett, opp til 1,6m',                   unit: 'stk',      price: 645 },
-    { id: 4210, cat: 'Maling',        name: 'Maling, Pil, Sving, opp til 1,6m',                  unit: 'stk',      price: 760 },
-    { id: 4211, cat: 'Maling',        name: 'Maling, 50cm, Gangfelt',                            unit: 'lm',       price: 185 },
-    { id: 4212, cat: 'Maling',        name: 'Maling, Symbol, Vikelinje',                         unit: 'stk',      price: 135 },
-    { id: 4213, cat: 'Maling',        name: 'Maling, Symbol, farget bakgrunn',                   unit: 'stk',      price: 1890 },
-    { id: 4214, cat: 'Maling',        name: 'Maling, Nummer / Bokstaver (På gulv)',               unit: 'stk',      price: 155 },
-    { id: 4215, cat: 'Maling',        name: 'Maling, Pr. kvm, Alle farger',                      unit: 'kvm',      price: 320 },
-    { id: 4216, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, 4 siders plass, nymerking', unit: 'lm',     price: 27 },
-    { id: 4217, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, 4 siders plass, nymerking', unit: 'lm',     price: 27 },
-    { id: 4230, cat: 'Maling',        name: 'Maling, 10cm linje, Sverting linjer (male sort)',    unit: 'lm',       price: 23 },
-    { id: 4291, cat: 'Maling',        name: 'Maling, Rigg, maskiner og utstyr',                  unit: 'oppmøte',  price: 2400 },
-    { id: 4292, cat: 'Maling',        name: 'Maling, Rigg, tillegg for annen farge',             unit: 'oppmøte',  price: 700 },
+    { id: 4202, cat: 'Maling', name: 'Maling, 10cm linje, HVIT, remerking', unit: 'lm', price: 19 },
+    { id: 4203, cat: 'Maling', name: 'Maling, 10cm linje, HVIT, nymerking (inkl. oppmåling)', unit: 'lm', price: 27 },
+    { id: 4204, cat: 'Maling', name: 'Maling, 10cm linje, HVIT, per plass, remerking', unit: 'plass', price: 137 },
+    { id: 4205, cat: 'Maling', name: 'Maling, 10cm linje, HVIT, per plass, nymerking', unit: 'plass', price: 184 },
+    { id: 4206, cat: 'Maling', name: 'Maling, 10cm linje, GUL, remerking', unit: 'lm', price: 22 },
+    { id: 4207, cat: 'Maling', name: 'Maling, 10cm linje, GUL, nymerking (inkl. oppmåling)', unit: 'lm', price: 26 },
+    { id: 4208, cat: 'Maling', name: 'Maling, symboler, HC/elbil/MC/sykkel', unit: 'stk', price: 578 },
+    { id: 4209, cat: 'Maling', name: 'Maling, Pil, Rett, opp til 1,6m', unit: 'stk', price: 645 },
+    { id: 4210, cat: 'Maling', name: 'Maling, Pil, Sving, opp til 1,6m', unit: 'stk', price: 760 },
+    { id: 4211, cat: 'Maling', name: 'Maling, 50cm, Gangfelt', unit: 'lm', price: 185 },
+    { id: 4212, cat: 'Maling', name: 'Maling, Symbol, Vikelinje', unit: 'stk', price: 135 },
+    { id: 4213, cat: 'Maling', name: 'Maling, Symbol, farget bakgrunn', unit: 'stk', price: 1890 },
+    { id: 4214, cat: 'Maling', name: 'Maling, Nummer / Bokstaver (På gulv)', unit: 'stk', price: 155 },
+    { id: 4215, cat: 'Maling', name: 'Maling, Pr. kvm, Alle farger', unit: 'kvm', price: 320 },
+    { id: 4216, cat: 'Maling', name: 'Maling, 10cm linje, HVIT, 4 siders plass, nymerking', unit: 'lm', price: 27 },
+    { id: 4217, cat: 'Maling', name: 'Maling, 10cm linje, HVIT, 4 siders plass, nymerking', unit: 'lm', price: 27 },
+    { id: 4230, cat: 'Maling', name: 'Maling, 10cm linje, Sverting linjer (male sort)', unit: 'lm', price: 23 },
+    { id: 4291, cat: 'Maling', name: 'Maling, Rigg, maskiner og utstyr', unit: 'oppmøte', price: 2400 },
+    { id: 4292, cat: 'Maling', name: 'Maling, Rigg, tillegg for annen farge', unit: 'oppmøte', price: 700 },
 
     // --- Demarkering ---
-    { id: 2501, cat: 'Demarkering',   name: 'Demarkering av termoplast, Fjerning 10cm linje',    unit: 'lm',       price: 170 },
-    { id: 2502, cat: 'Demarkering',   name: 'Demarkering av termoplast, Fjerning symboler',      unit: 'stk',      price: 675 },
-    { id: 2503, cat: 'Demarkering',   name: 'Demarkering av maling, Fjerning 10cm linje',        unit: 'lm',       price: 111 },
-    { id: 2504, cat: 'Demarkering',   name: 'Demarkering av maling, Fjerning symboler',          unit: 'stk',      price: 611 },
-    { id: 2591, cat: 'Demarkering',   name: 'Demarkering, Rigg, slipemaskin, inkl. fjerning',    unit: 'oppmøte',  price: 2300 },
-    { id: 2592, cat: 'Demarkering',   name: 'Demarkering, Rigg, fresemaskin, inkl. fjerning',    unit: 'oppmøte',  price: 2300 },
+    { id: 2501, cat: 'Demarkering', name: 'Demarkering av termoplast, Fjerning 10cm linje', unit: 'lm', price: 170 },
+    { id: 2502, cat: 'Demarkering', name: 'Demarkering av termoplast, Fjerning symboler', unit: 'stk', price: 675 },
+    { id: 2503, cat: 'Demarkering', name: 'Demarkering av maling, Fjerning 10cm linje', unit: 'lm', price: 111 },
+    { id: 2504, cat: 'Demarkering', name: 'Demarkering av maling, Fjerning symboler', unit: 'stk', price: 611 },
+    { id: 2591, cat: 'Demarkering', name: 'Demarkering, Rigg, slipemaskin, inkl. fjerning', unit: 'oppmøte', price: 2300 },
+    { id: 2592, cat: 'Demarkering', name: 'Demarkering, Rigg, fresemaskin, inkl. fjerning', unit: 'oppmøte', price: 2300 },
 
     // --- Kaldplast ---
-    { id: 4301, cat: 'Kaldplast',     name: 'Kaldplast, Pr. kvm, Alle farger',                   unit: 'kvm',      price: 780 },
-    { id: 4391, cat: 'Kaldplast',     name: 'Kaldplast, Rigg, maskiner og utstyr',               unit: 'oppmøte',  price: 3900 },
+    { id: 4301, cat: 'Kaldplast', name: 'Kaldplast, Pr. kvm, Alle farger', unit: 'kvm', price: 780 },
+    { id: 4391, cat: 'Kaldplast', name: 'Kaldplast, Rigg, maskiner og utstyr', unit: 'oppmøte', price: 3900 },
 
     // --- Tillegg og kjøring ---
-    { id: 8801, cat: 'Tillegg',       name: 'Kjøring per km, utenfor Oslo',                      unit: 'km',       price: 7 },
-    { id: 8802, cat: 'Tillegg',       name: 'Kjøretid operatører, utenfor Oslo (2 pers)',         unit: 'time',     price: 640 },
-    { id: 8804, cat: 'Tillegg',       name: 'Aimo, Minstepris på ett oppdrag innenbys',          unit: 'stk',      price: 1607 },
-    { id: 8807, cat: 'Tillegg',       name: 'Tillegg for lite oppdrag under 3100 kr, Oslo',       unit: 'stk',      price: 1600 },
-    { id: 8808, cat: 'Tillegg',       name: 'Tillegg for lite oppdrag under 3100 kr, utenfor Oslo', unit: 'stk',    price: 1700 },
-    { id: 8809, cat: 'Tillegg',       name: 'Tørk, tørking før merking høst/vinter/vår',         unit: 'time',     price: 2200 },
-    { id: 8811, cat: 'Tillegg',       name: 'Bompasseringer, Oslo',                              unit: 'oppmøte',  price: 74 },
-    { id: 8893, cat: 'Tillegg',       name: 'Teiping av p-plasser',                              unit: 'stk',      price: 990 },
+    { id: 8801, cat: 'Tillegg', name: 'Kjøring per km, utenfor Oslo', unit: 'km', price: 7 },
+    { id: 8802, cat: 'Tillegg', name: 'Kjøretid operatører, utenfor Oslo (2 pers)', unit: 'time', price: 640 },
+    { id: 8804, cat: 'Tillegg', name: 'Aimo, Minstepris på ett oppdrag innenbys', unit: 'stk', price: 1607 },
+    { id: 8807, cat: 'Tillegg', name: 'Tillegg for lite oppdrag under 3100 kr, Oslo', unit: 'stk', price: 1600 },
+    { id: 8808, cat: 'Tillegg', name: 'Tillegg for lite oppdrag under 3100 kr, utenfor Oslo', unit: 'stk', price: 1700 },
+    { id: 8809, cat: 'Tillegg', name: 'Tørk, tørking før merking høst/vinter/vår', unit: 'time', price: 2200 },
+    { id: 8811, cat: 'Tillegg', name: 'Bompasseringer, Oslo', unit: 'oppmøte', price: 74 },
+    { id: 8893, cat: 'Tillegg', name: 'Teiping av p-plasser', unit: 'stk', price: 990 },
 ];
 
 // Apply annual price adjustment
@@ -207,18 +207,18 @@ function syncCategoryUI() {
 
 // Default mapping suggestions: drawing key -> best matching product ID
 const DEFAULT_MAPPINGS = {
-    'parkeringsplass':    3203,  // Termoplast per plass
-    'fotgjengerfelt':     3207,  // Termoplast gangfelt
-    'pil':                3204,  // Termoplast pil rett
-    'svingpil_venstre':   3205,  // Termoplast pil sving
-    'svingpil_hoyre':     3205,  // Termoplast pil sving
-    'linje_enkel':        3202,  // Termoplast 10cm linje
-    'linje_dobbel':       3212,  // Termoplast 20cm linje
-    'symbol_hc':          3206,  // Termoplast symbol HC
-    'symbol_mc':          3206,
-    'symbol_el-bil':      3206,
-    'symbol_elbil':       3206,
-    'symbol_sykkel':      3206,
+    'parkeringsplass': 3203,  // Termoplast per plass
+    'fotgjengerfelt': 3207,  // Termoplast gangfelt
+    'pil': 3204,  // Termoplast pil rett
+    'svingpil_venstre': 3205,  // Termoplast pil sving
+    'svingpil_hoyre': 3205,  // Termoplast pil sving
+    'linje_enkel': 3202,  // Termoplast 10cm linje
+    'linje_dobbel': 3212,  // Termoplast 20cm linje
+    'symbol_hc': 3206,  // Termoplast symbol HC
+    'symbol_mc': 3206,
+    'symbol_el-bil': 3206,
+    'symbol_elbil': 3206,
+    'symbol_sykkel': 3206,
 };
 
 function loadDrawingData() {
@@ -664,7 +664,7 @@ function setupActions() {
 
                 // Ask if they want to bind this to a specific customer
                 const custName = prompt("Hvilken kunde gjelder denne prislisten for?\n(La stå blank for å bare bruke den midlertidig her og nå)", "Park Nordic");
-                
+
                 if (custName && custName.trim() !== "") {
                     // Save to local storage for future automatic loads
                     const cleanName = custName.trim().toLowerCase();
@@ -677,7 +677,7 @@ function setupActions() {
 
                 renderProducts();
                 updateSummary();
-                
+
                 const showName = (custName && custName.trim() !== "") ? custName : file.name;
                 if (priceSourceLabel) {
                     priceSourceLabel.textContent = `Priser: ${showName}`;
@@ -772,10 +772,10 @@ function applyCustomPricesToProducts(excelList) {
             if (xName.length < 3) return false;
             return xName === pNameLower || pNameLower.includes(xName) || xName.includes(pNameLower.replace('maling, ', '').replace('termoplast, ', ''));
         });
-        
+
         if (match) {
-            const newPrice = match.customerPrice > 0 ? match.customerPrice : 
-                            (match.discountPrice > 0 ? match.discountPrice : match.basePrice);
+            const newPrice = match.customerPrice > 0 ? match.customerPrice :
+                (match.discountPrice > 0 ? match.discountPrice : match.basePrice);
             if (newPrice > 0) {
                 p.price = newPrice;
                 matchCount++;
@@ -861,7 +861,7 @@ function handleCustomerNameChange(name) {
                 priceSourceLabel.textContent = `Priser: ${name.trim()}`;
                 priceSourceLabel.style.color = '#059669';
             }
-        } catch(e) {
+        } catch (e) {
             console.error('Kunne ikke laste lagrede kundepriser', e);
         }
         return;
@@ -892,7 +892,7 @@ function handleCustomerNameChange(name) {
 async function handlePRegisterSearch() {
     const projInput = $('#customer-project')?.value?.trim() || '';
     const addrInput = $('#customer-address')?.value?.trim() || '';
-    
+
     // Combine them, and if empty, warn user.
     const query = `${addrInput} ${projInput}`.trim();
 
@@ -905,7 +905,7 @@ async function handlePRegisterSearch() {
         const btn = $('#search-pregister-btn');
         const oldText = btn.innerHTML;
         btn.innerHTML = '⏳';
-        
+
         const vegvesen = await import('./api/vegvesen.js?v=test13');
         const hits = await vegvesen.searchByAddress(query);
 
@@ -948,11 +948,11 @@ async function handlePRegisterSearch() {
 
 function applyParkingAreaToQuote(areaInfo) {
     if (!areaInfo) return;
-    
+
     let avgiftsbelagte = 0;
     let avgiftsfrie = 0;
     let hc = 0;
-    
+
     if (typeof areaInfo.antallAvgiftsbelagte === 'number') avgiftsbelagte = areaInfo.antallAvgiftsbelagte;
     if (typeof areaInfo.antallAvgiftsfrie === 'number') avgiftsfrie = areaInfo.antallAvgiftsfrie;
     if (typeof areaInfo.antallForflytningshemmede === 'number') hc = areaInfo.antallForflytningshemmede;
@@ -963,7 +963,7 @@ function applyParkingAreaToQuote(areaInfo) {
     // By default Maling, unless swapped to Termoplast
     const mapString = localStorage.getItem('ai_product_mapping');
     const isTermoplast = (mapString && mapString.includes('TERMOPLAST'));
-    
+
     // IDs matching the selected material
     const pPlassID = isTermoplast ? 3203 : 3404; // 10cm linje, per plass
     const hcSymbolID = isTermoplast ? 3206 : 3406; // Symbol, HC
@@ -972,7 +972,7 @@ function applyParkingAreaToQuote(areaInfo) {
         selectedProducts[pPlassID] = { qty: (selectedProducts[pPlassID]?.qty || 0) + totP };
         changesMade = true;
     }
-    
+
     if (hc > 0) {
         selectedProducts[hcSymbolID] = { qty: (selectedProducts[hcSymbolID]?.qty || 0) + hc };
         changesMade = true;
@@ -982,7 +982,7 @@ function applyParkingAreaToQuote(areaInfo) {
         renderProducts();
         updateSummary();
         alert(`La til ${totP} P-plasser og ${hc} HC-plasser hentet automatisk fra parkeringsregisteret: "${areaInfo.navn}"`);
-        
+
         const projInput = $('#customer-project');
         if (projInput && (!projInput.value || projInput.value.length < 5)) {
             projInput.value = areaInfo.navn;
@@ -1224,7 +1224,7 @@ async function fetchFromCheckedAccounts() {
         // Deduplicate by subject+from (same email might arrive on both accounts)
         const seen = new Set();
         allEmails = allEmails.filter(m => {
-            const key = `${m.from_email}:${m.subject}:${m.date?.substring(0,10)}`;
+            const key = `${m.from_email}:${m.subject}:${m.date?.substring(0, 10)}`;
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
@@ -1468,7 +1468,7 @@ function createQuoteFromEmail(mail) {
     const senderLower = ((mail.from_name || '') + ' ' + (mail.from_email || '') + ' ' + (mail.subject || '')).toLowerCase();
     const emailDomain = ((mail.from_email || '').split('@')[1] || '').toLowerCase();
     let detectedCustomer = '';
-    
+
     if (senderLower.includes('aimo') || emailDomain.includes('aimo')) {
         detectedCustomer = 'Aimo Park';
     } else if (senderLower.includes('park nordic') || senderLower.includes('parknordic') || emailDomain.includes('parknordic')) {
@@ -1508,14 +1508,14 @@ function createQuoteFromEmail(mail) {
         // Reset state
         contentBox.classList.add('hidden');
         toggleBtn.textContent = '👀 Vis opprinnelig forespørsel';
-        
+
         // Populate text (use full_body if present, else body_preview)
         textBox.textContent = mail.full_body || mail.body_preview || 'Ingen tekst tilgjengelig.';
 
         // Ensure we don't attach multiple listeners if called multiple times
         const newToggleBtn = toggleBtn.cloneNode(true);
         toggleBtn.parentNode.replaceChild(newToggleBtn, toggleBtn);
-        
+
         newToggleBtn.addEventListener('click', () => {
             contentBox.classList.toggle('hidden');
             if (contentBox.classList.contains('hidden')) {
@@ -1576,13 +1576,13 @@ function createQuoteFromEmail(mail) {
 
 function parseEmailTextToProducts(text, detectedCustomer) {
     if (!text) return;
-    
+
     // Debug: log parsed text so we can see what the parser receives
     console.log('=== parseEmailTextToProducts ===');
     console.log('Text length:', text.length);
     console.log('Detected customer:', detectedCustomer || '(ingen)');
     console.log('Full text:', text);
-    
+
     const lowerText = text.toLowerCase();
     let hasChanged = false;
     const isAimo = (detectedCustomer || '').toLowerCase().includes('aimo');
@@ -1607,7 +1607,7 @@ function parseEmailTextToProducts(text, detectedCustomer) {
             const re1 = new RegExp('(\\d+)\\s*(?:stk\\.?\\s*)?(?:' + kw + ')', 'gi');
             let m;
             while ((m = re1.exec(text)) !== null) total += parseInt(m[1]);
-            
+
             // Pattern 2: keyword THEN number — "elbilsymbol 2", "elbil: 2 stk", "elbil x2"
             const re2 = new RegExp('(?:' + kw + ')(?:er|ler|er)?\\s*[:=x]?\\s*(\\d+)', 'gi');
             while ((m = re2.exec(text)) !== null) total += parseInt(m[1]);
@@ -1648,11 +1648,11 @@ function parseEmailTextToProducts(text, detectedCustomer) {
             foundAddresses.push(matchAddr[0]);
         }
     }
-    
+
     if (foundAddresses.length > 0) {
         const projInput = document.getElementById('customer-project');
         const addrInput = document.getElementById('customer-address');
-        
+
         if (foundAddresses.length === 1) {
             if (projInput) projInput.value = foundAddresses[0];
         } else {
@@ -1666,7 +1666,7 @@ function parseEmailTextToProducts(text, detectedCustomer) {
 
     function addProductByBestGuess(keywords, qty) {
         if (qty <= 0) return;
-        
+
         let foundId = null;
         // Try to find matching product
         for (const p of PRODUCTS) {
@@ -1737,26 +1737,26 @@ function parseEmailTextToProducts(text, detectedCustomer) {
         const symbolInfo = symbolCount > 0 ? `\nElbil/sykkel/MC-symboler funnet: ${symbolCount}` : '';
         const customerInfo = detectedCustomer ? `\nKunde gjenkjent: ${detectedCustomer}` : '';
         alert(`🎉 AI Tolkning fullført:\n\nMateriale: ${defaultMaterial}\nPlasser funnet: ${plassCount}\nHC-symboler funnet: ${hcCount}${symbolInfo}${riggInfo}${customerInfo}`);
-        
+
         // Show swap button and setup logic
         const swapBtn = document.getElementById('ai-swap-material-btn');
         if (swapBtn) {
             swapBtn.style.display = 'inline-block';
-            
+
             // Remove old listeners
             const newSwapBtn = swapBtn.cloneNode(true);
             swapBtn.parentNode.replaceChild(newSwapBtn, swapBtn);
-            
+
             newSwapBtn.addEventListener('click', () => {
                 const targetMaterial = defaultMaterial === 'maling' ? 'termoplast' : 'maling';
                 let swapCount = 0;
-                
+
                 // For each selected product, try to find inverse in target material
                 for (const [id, data] of Object.entries(selectedProducts)) {
                     const idNum = parseInt(id);
                     const prod = PRODUCTS.find(p => p.id === idNum);
                     if (!prod) continue;
-                    
+
                     const prodNameLower = prod.name.toLowerCase();
                     if (prodNameLower.includes(defaultMaterial)) {
                         // We need to swap this one
@@ -1767,7 +1767,7 @@ function parseEmailTextToProducts(text, detectedCustomer) {
                             .split(',')
                             .map(w => w.trim())
                             .filter(w => w.length > 2);
-                            
+
                         // Find equivalent in target material
                         let bestMatch = null;
                         for (const p2 of PRODUCTS) {
@@ -1779,19 +1779,19 @@ function parseEmailTextToProducts(text, detectedCustomer) {
                                 }
                             }
                         }
-                        
+
                         if (bestMatch) {
                             // Perform swap
                             selectedProducts[bestMatch] = { qty: data.qty };
                             delete selectedProducts[idNum];
-                            
+
                             // LEARN: Save this mapping for next time
                             learningMap[idNum] = bestMatch;
                             swapCount++;
                         }
                     }
                 }
-                
+
                 if (swapCount > 0) {
                     localStorage.setItem('ai_product_mapping', JSON.stringify(learningMap));
                     defaultMaterial = targetMaterial; // Update state
@@ -2032,7 +2032,7 @@ async function handleSendEmail() {
                     sendBtn.textContent = originalText;
                     sendBtn.disabled = false;
                 }
-                return handleSendEmail(); 
+                return handleSendEmail();
             } else {
                 alert("Sendeavbrutt. Passord kreves.");
                 return;
