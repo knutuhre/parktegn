@@ -1496,9 +1496,25 @@ function createQuoteFromEmail(mail) {
     // Store source email for sending
     quoteSourceEmail = mail;
 
-    // Show "Send tilbud" button
+    // Show "Send tilbud" button + recipient toggle
     const sendBtn = $('#send-email-btn');
     if (sendBtn) sendBtn.classList.remove('hidden');
+
+    const recipientToggle = $('#send-recipient-toggle');
+    if (recipientToggle) {
+        recipientToggle.classList.remove('hidden');
+        recipientToggle.style.display = 'flex';
+    }
+    const custEmailLabel = $('#send-customer-email');
+    if (custEmailLabel) {
+        custEmailLabel.textContent = mail.from_email ? `(${mail.from_email})` : '';
+    }
+    // Show attachment wrapper too
+    const attachWrapper = $('#attachment-input-wrapper');
+    if (attachWrapper) {
+        attachWrapper.classList.remove('hidden');
+        attachWrapper.style.display = 'flex';
+    }
 
     // Setup original email viewer
     const toggleBtn = $('#toggle-email-btn');
@@ -1935,27 +1951,46 @@ function getQuoteFilename() {
 }
 
 async function handleSendEmail() {
-    let toEmail = '';
+    const MY_EMAIL = 'post@christianiaoppmerking.no';
+    let customerEmail = '';
     let customerName = $('#customer-name')?.value || 'Kunde';
 
     if (!quoteSourceEmail) {
-        toEmail = prompt('Skriv inn kundens e-postadresse for å sende tilbudet direkte:');
-        if (!toEmail) return; // User cancelled
+        customerEmail = prompt('Skriv inn kundens e-postadresse for å sende tilbudet direkte:');
+        if (!customerEmail) return;
     } else {
-        toEmail = quoteSourceEmail.from_email;
-        customerName = quoteSourceEmail.from_name || toEmail;
+        customerEmail = quoteSourceEmail.from_email;
+        customerName = quoteSourceEmail.from_name || customerEmail;
     }
+
+    // Read checkbox state
+    const sendToCustomer = $('#send-to-customer')?.checked ?? true;
+    const sendToSelf = $('#send-to-self')?.checked ?? false;
+
+    if (!sendToCustomer && !sendToSelf) {
+        alert('Du må velge minst én mottaker!');
+        return;
+    }
+
+    // Build recipient display
+    const recipients = [];
+    if (sendToCustomer) recipients.push(`${customerName} <${customerEmail}>`);
+    if (sendToSelf) recipients.push(`Deg <${MY_EMAIL}>`);
 
     const subject = `Pristilbud – ${$('#customer-project')?.value || 'Oppmerking'}`;
 
     // Confirm before sending
     const ok = confirm(
-        `Sender tilbud til:\n${customerName} <${toEmail}>\n\nEmne: ${subject}\n\nVil du fortsette?`
+        `Sender tilbud til:\n${recipients.join('\n')}\n\nEmne: ${subject}\n\nVil du fortsette?`
     );
     if (!ok) return;
 
-    // Ask if they want a copy
-    const sendCopy = confirm('Ønsker du at det sendes en usynlig blindkopi (BCC) av tilbudet til post@christianiaoppmerking.no for arkivering?');
+    // Determine actual to_email and bcc
+    let toEmail = sendToCustomer ? customerEmail : MY_EMAIL;
+    let bccEmail = '';
+    if (sendToCustomer && sendToSelf) {
+        bccEmail = MY_EMAIL; // BCC to self when sending to customer
+    }
 
     const sendBtn = $('#send-email-btn');
     const originalText = sendBtn?.textContent;
@@ -2018,7 +2053,7 @@ async function handleSendEmail() {
                 body_text: bodyText,
                 pdf_base64: pdfBase64,
                 pdf_filename: getQuoteFilename(),
-                bcc_email: sendCopy ? 'post@christianiaoppmerking.no' : '',
+                bcc_email: bccEmail,
                 custom_attachments: customAttachments
             })
         });

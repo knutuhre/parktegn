@@ -332,6 +332,18 @@
                 <input type="file" id="quote-attachments" multiple style="display:none;">
                 <span id="quote-attachments-count" style="font-size:13px; color:#64748b;">(Ingen valgt)</span>
             </div>
+            <div class="send-recipient-toggle hidden" id="send-recipient-toggle" style="display:flex; flex-direction:column; gap:6px; margin-right:12px;">
+                <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:#94a3b8; cursor:pointer; user-select:none;">
+                    <input type="checkbox" id="send-to-customer" checked style="width:16px; height:16px; accent-color:#6366f1; cursor:pointer;">
+                    <span>📤 Send til kunde</span>
+                    <span id="send-customer-email" style="font-size:11px; color:#64748b; margin-left:4px;"></span>
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:#94a3b8; cursor:pointer; user-select:none;">
+                    <input type="checkbox" id="send-to-self" style="width:16px; height:16px; accent-color:#22c55e; cursor:pointer;">
+                    <span>📥 Kopi til meg</span>
+                    <span style="font-size:11px; color:#64748b; margin-left:4px;">post@christianiaoppmerking.no</span>
+                </label>
+            </div>
             <button class="btn-send-email hidden" id="send-email-btn">
                 📧 Send tilbud
             </button>
