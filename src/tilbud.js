@@ -776,11 +776,11 @@ function applyCustomPricesToProducts(excelList) {
     return matchCount;
 }
 
-// ===== Hardcoded Customer Price Maps (from Unimicro exports) =====
-// Kundepris 2026 (+3.5% KPI) from "prisliste 2026.xltx"
+// ===== Hardcoded Customer Price Maps (from Unimicro "prisliste 2026.xltx") =====
+// Kundepris +3.5% KPI for 2026. Tabs: "Aimo Park 2025", "Park Nordic", "Aimo utenbys"
 const CUSTOMER_PRICES = {
     'aimo': {
-        label: 'Aimo Park',
+        label: 'Aimo Park (innenbys)',
         prices: {
             4202: 13, 4203: 17, 4204: 106, 4205: 131, 4206: 14, 4207: 19,
             4208: 459, 4209: 630, 4210: 715, 4211: 149, 4213: 1956,
@@ -790,13 +790,31 @@ const CUSTOMER_PRICES = {
         }
     },
     'aimo park': {
-        label: 'Aimo Park',
+        label: 'Aimo Park (innenbys)',
         prices: {
             4202: 13, 4203: 17, 4204: 106, 4205: 131, 4206: 14, 4207: 19,
             4208: 459, 4209: 630, 4210: 715, 4211: 149, 4213: 1956,
             3291: 5992, 3202: 43, 3204: 1018, 3205: 1096, 3206: 1451, 3207: 154,
             3303: 1491, 3304: 1630, 3306: 1342,
             2501: 121, 8804: 1663, 4216: 22, 4217: 255, 8811: 76
+        }
+    },
+    'aimo utenbys': {
+        label: 'Aimo Park (utenbys)',
+        prices: {
+            4202: 14, 4203: 19, 4204: 120, 4205: 150, 4206: 16, 4207: 22,
+            4208: 491, 4209: 720, 4210: 851, 4211: 169, 4213: 2236,
+            3291: 5706, 3202: 41, 3204: 970, 3205: 1044, 3206: 1382, 3207: 147,
+            3391: 2182, 3303: 1705, 3304: 1863, 3306: 1534,
+            2501: 115, 8803: 1998, 4216: 25
+        }
+    },
+    'park nordic': {
+        label: 'Park Nordic',
+        prices: {
+            4291: 2413, 4202: 18, 4203: 24, 4204: 126, 4205: 181,
+            4208: 515, 4209: 630, 4210: 744,
+            8802: 1055, 8807: 1663, 8811: 89, 8812: 90
         }
     }
 };
