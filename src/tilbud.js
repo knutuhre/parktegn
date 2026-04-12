@@ -997,37 +997,64 @@ let emailAccounts = [];
 let currentEmailAccount = '';
 let cachedEmails = [];  // Cache last fetched emails for re-rendering
 
-// Dismissed emails stored in localStorage (never touches mailbox)
+// Dismissed/handled emails stored in localStorage
 const DISMISSED_STORAGE_KEY = 'tilbud_dismissed_emails';
+// Now stores objects: { key: { status: 'not_job'|'priced', reason?: string, date: iso } }
 
-function loadDismissedIds() {
+function loadDismissedMap() {
     try {
-        return JSON.parse(localStorage.getItem(DISMISSED_STORAGE_KEY)) || [];
-    } catch { return []; }
+        const raw = localStorage.getItem(DISMISSED_STORAGE_KEY);
+        if (!raw) return {};
+        // Migrate from old array format
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            const map = {};
+            for (const id of parsed) map[id] = { status: 'dismissed', date: new Date().toISOString() };
+            localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(map));
+            return map;
+        }
+        return parsed;
+    } catch { return {}; }
 }
 
-function saveDismissedIds(ids) {
+function saveDismissedMap(map) {
     try {
-        localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(ids));
+        localStorage.setItem(DISMISSED_STORAGE_KEY, JSON.stringify(map));
     } catch { /* ignore */ }
 }
 
-function dismissEmail(emailId, accountKey) {
+function markEmail(emailId, accountKey, status, reason) {
     const key = `${accountKey}:${emailId}`;
-    const dismissed = loadDismissedIds();
-    if (!dismissed.includes(key)) {
-        dismissed.push(key);
-        saveDismissedIds(dismissed);
-    }
-    // Re-render with cached data
-    const filtered = filterDismissed(cachedEmails, currentEmailAccount);
-    updateEmailBadge(filtered.length);
-    renderEmailList(filtered);
+    const map = loadDismissedMap();
+    map[key] = { status, reason: reason || '', date: new Date().toISOString() };
+    saveDismissedMap(map);
+    // Re-render
+    renderEmailList(cachedEmails);
+    updateEmailBadge(cachedEmails.filter(m => !isEmailHandled(m)).length);
+}
+
+function isEmailHandled(mail) {
+    const map = loadDismissedMap();
+    const accKey = mail._accountKey || currentEmailAccount;
+    const key = `${accKey}:${mail.id}`;
+    return !!map[key];
+}
+
+function getEmailStatus(mail) {
+    const map = loadDismissedMap();
+    const accKey = mail._accountKey || currentEmailAccount;
+    const key = `${accKey}:${mail.id}`;
+    return map[key] || null;
 }
 
 function filterDismissed(emails, accountKey) {
-    const dismissed = loadDismissedIds();
-    return emails.filter(m => !dismissed.includes(`${accountKey}:${m.id}`));
+    // For multi-account, emails already have _accountKey set
+    const map = loadDismissedMap();
+    return emails.filter(m => {
+        const accKey = m._accountKey || accountKey;
+        const key = `${accKey}:${m.id}`;
+        return !map[key];
+    });
 }
 
 function setupEmailPanel() {
@@ -1180,8 +1207,7 @@ async function fetchFromCheckedAccounts() {
         for (let i = 0; i < results.length; i++) {
             if (results[i].status === 'fulfilled' && Array.isArray(results[i].value)) {
                 const accKey = accounts[i];
-                const filtered = filterDismissed(results[i].value, accKey);
-                for (const m of filtered) {
+                for (const m of results[i].value) {
                     m._accountKey = accKey;
                     allEmails.push(m);
                 }
@@ -1206,7 +1232,8 @@ async function fetchFromCheckedAccounts() {
 
         cachedEmails = allEmails;
         currentEmailAccount = accounts.join(',');
-        updateEmailBadge(allEmails.length);
+        const unhandledCount = allEmails.filter(m => !isEmailHandled(m)).length;
+        updateEmailBadge(unhandledCount);
 
         if (allEmails.length === 0) {
             if (empty) empty.style.display = '';
@@ -1318,6 +1345,11 @@ function createEmailCard(mail) {
     card.className = 'email-card';
     if (mail.is_quote_request) card.classList.add('is-quote');
 
+    const status = getEmailStatus(mail);
+    if (status) {
+        card.classList.add('email-handled');
+    }
+
     // Format date nicely
     let dateStr = '';
     try {
@@ -1332,12 +1364,25 @@ function createEmailCard(mail) {
     // Truncate body preview
     const preview = (mail.body_preview || '').substring(0, 200);
 
+    // Status badge
+    let statusBadge = '';
+    if (status) {
+        if (status.status === 'priced') {
+            statusBadge = '<span style="background:#059669; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">✅ Priset</span>';
+        } else if (status.status === 'not_job') {
+            const reasonText = status.reason ? ` – ${escapeHtml(status.reason)}` : '';
+            statusBadge = `<span style="background:#ef4444; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">❌ Ikke oppdrag${reasonText}</span>`;
+        } else {
+            statusBadge = '<span style="background:#94a3b8; color:#fff; padding:2px 8px; border-radius:4px; font-size:11px;">Fjernet</span>';
+        }
+    }
+
     card.innerHTML = `
         <div class="email-card-header">
             <div class="email-card-subject-line">${escapeHtml(mail.subject)}</div>
             <div class="email-card-header-right">
                 <span class="email-card-date">${dateStr}</span>
-                <button class="email-dismiss-btn" title="Fjern fra listen">✕</button>
+                ${statusBadge}
             </div>
         </div>
         <div class="email-card-preview">${escapeHtml(preview)}</div>
@@ -1348,25 +1393,68 @@ function createEmailCard(mail) {
             </div>
         ` : ''}
         <div class="email-card-actions">
-            <button class="email-quote-btn">📝 Lag tilbud</button>
+            ${!status ? `
+                <button class="email-not-job-btn" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#ef4444; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:500;">❌ Ikke oppdrag</button>
+                <button class="email-quote-btn">📝 Lag tilbud</button>
+                <button class="email-priced-btn" style="background:rgba(5,150,105,0.1); border:1px solid rgba(5,150,105,0.3); color:#059669; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:500;">✅ Priset</button>
+            ` : `
+                <button class="email-undo-btn" style="background:rgba(148,163,184,0.1); border:1px solid rgba(148,163,184,0.3); color:#64748b; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer;">↩ Angre</button>
+                ${status.status !== 'priced' ? '<button class="email-quote-btn">📝 Lag tilbud</button>' : ''}
+            `}
         </div>
     `;
 
     // "Lag tilbud" button
-    card.querySelector('.email-quote-btn').addEventListener('click', () => {
-        createQuoteFromEmail(mail);
-    });
+    const quoteBtn = card.querySelector('.email-quote-btn');
+    if (quoteBtn) {
+        quoteBtn.addEventListener('click', () => {
+            createQuoteFromEmail(mail);
+        });
+    }
 
-    // Dismiss button – animate out then remove from local list
-    card.querySelector('.email-dismiss-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        card.style.transition = 'all 0.3s ease';
-        card.style.opacity = '0';
-        card.style.transform = 'translateX(20px)';
-        setTimeout(() => {
-            dismissEmail(mail.id, currentEmailAccount);
-        }, 300);
-    });
+    // "Ikke oppdrag" button
+    const notJobBtn = card.querySelector('.email-not-job-btn');
+    if (notJobBtn) {
+        notJobBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const reason = prompt('Hvorfor er dette ikke et oppdrag? (valgfritt)');
+            if (reason === null) return; // Cancelled
+            const accKey = mail._accountKey || currentEmailAccount;
+            card.style.transition = 'all 0.3s ease';
+            card.style.opacity = '0.5';
+            setTimeout(() => {
+                markEmail(mail.id, accKey, 'not_job', reason);
+            }, 200);
+        });
+    }
+
+    // "Priset" button
+    const pricedBtn = card.querySelector('.email-priced-btn');
+    if (pricedBtn) {
+        pricedBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const accKey = mail._accountKey || currentEmailAccount;
+            card.style.transition = 'all 0.3s ease';
+            card.style.opacity = '0.5';
+            setTimeout(() => {
+                markEmail(mail.id, accKey, 'priced');
+            }, 200);
+        });
+    }
+
+    // "Angre" button
+    const undoBtn = card.querySelector('.email-undo-btn');
+    if (undoBtn) {
+        undoBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const accKey = mail._accountKey || currentEmailAccount;
+            const map = loadDismissedMap();
+            delete map[`${accKey}:${mail.id}`];
+            saveDismissedMap(map);
+            renderEmailList(cachedEmails);
+            updateEmailBadge(cachedEmails.filter(m => !isEmailHandled(m)).length);
+        });
+    }
 
     return card;
 }

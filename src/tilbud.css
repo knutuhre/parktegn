@@ -1445,6 +1445,15 @@ input[type="number"] {
     border-left: 3px solid var(--success);
 }
 
+.email-card.email-handled {
+    opacity: 0.5;
+    background: rgba(148, 163, 184, 0.05);
+}
+
+.email-card.email-handled:hover {
+    opacity: 0.85;
+}
+
 .email-card-header {
     display: flex;
     align-items: flex-start;
