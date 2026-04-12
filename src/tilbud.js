@@ -1464,8 +1464,24 @@ function createQuoteFromEmail(mail) {
     const nameInput = $('#customer-name');
     const projectInput = $('#customer-project');
 
+    // Detect known customers from sender name/email/subject
+    const senderLower = ((mail.from_name || '') + ' ' + (mail.from_email || '') + ' ' + (mail.subject || '')).toLowerCase();
+    let detectedCustomer = '';
+    
+    if (senderLower.includes('aimo')) {
+        detectedCustomer = 'Aimo Park';
+    } else if (senderLower.includes('park nordic') || senderLower.includes('parknordic')) {
+        detectedCustomer = 'Park Nordic';
+    }
+
     if (nameInput) {
-        nameInput.value = mail.from_name || mail.from_email || '';
+        if (detectedCustomer) {
+            nameInput.value = detectedCustomer;
+        } else {
+            nameInput.value = mail.from_name || mail.from_email || '';
+        }
+        // Trigger customer price lookup
+        handleCustomerNameChange(nameInput.value);
     }
     if (projectInput) {
         // Use subject as project name
@@ -1541,7 +1557,7 @@ function createQuoteFromEmail(mail) {
     }
 
     // Load and select products based on email text
-    parseEmailTextToProducts(mail.full_body || mail.body_preview || '');
+    parseEmailTextToProducts(mail.full_body || mail.body_preview || '', detectedCustomer);
 
     // Close panel
     closeEmailPanel();
@@ -1557,22 +1573,24 @@ function createQuoteFromEmail(mail) {
     }
 }
 
-function parseEmailTextToProducts(text) {
+function parseEmailTextToProducts(text, detectedCustomer) {
     if (!text) return;
     
     // Debug: log parsed text so we can see what the parser receives
     console.log('=== parseEmailTextToProducts ===');
     console.log('Text length:', text.length);
+    console.log('Detected customer:', detectedCustomer || '(ingen)');
     console.log('Full text:', text);
     
     const lowerText = text.toLowerCase();
     let hasChanged = false;
+    const isAimo = (detectedCustomer || '').toLowerCase().includes('aimo');
 
     // 1. Guess Material
     let defaultMaterial = '';
     if (lowerText.includes('termoplast')) {
         defaultMaterial = 'termoplast';
-    } else if (lowerText.includes('maling')) {
+    } else if (lowerText.includes('maling') || lowerText.includes('male')) {
         defaultMaterial = 'maling';
     } else {
         // Fallback or prompt
@@ -1620,10 +1638,7 @@ function parseEmailTextToProducts(text) {
         'motorsykkel(?:symbol)?', 'ladesymbol', 'ladeskilt'
     ]);
 
-    const riggCount = 1;
-
     // 3. Extract Addresses (Heuristic)
-    // Match common street formats: Capitalized word + Number (e.g. Storgata 1, Nydalsveien 22)
     const addressRegex = /\b[A-ZÆØÅ][a-zæøå]+\s+\d+[a-zA-Z]?\b/g;
     let foundAddresses = [];
     let matchAddr;
@@ -1633,8 +1648,6 @@ function parseEmailTextToProducts(text) {
         }
     }
     
-    // Attempt to extract zip codes nearby
-    // If we have just 1 address, put it in project address. If 2+, assume last is office (signature), first is project
     if (foundAddresses.length > 0) {
         const projInput = document.getElementById('customer-project');
         const addrInput = document.getElementById('customer-address');
@@ -1673,24 +1686,56 @@ function parseEmailTextToProducts(text) {
         }
     }
 
-    // Add plasser
+    function addProductById(id, qty) {
+        if (qty <= 0) return;
+        if (!selectedProducts[id]) selectedProducts[id] = { qty: 0 };
+        selectedProducts[id].qty += qty;
+        hasChanged = true;
+    }
+
+    // Add plasser and symbols
     if (defaultMaterial === 'maling') {
         addProductByBestGuess(['maling', 'per plass', 'nymerking'], plassCount);
-        addProductByBestGuess(['maling', 'symboler', 'hc'], hcCount);      // HC symbols
-        addProductByBestGuess(['maling', 'symboler', 'hc'], symbolCount);   // elbil/sykkel/MC → same product
-        addProductByBestGuess(['maling', 'rigg', 'maskiner'], riggCount);
+        addProductByBestGuess(['maling', 'symboler', 'hc'], hcCount);
+        addProductByBestGuess(['maling', 'symboler', 'hc'], symbolCount);
     } else {
         addProductByBestGuess(['termoplast', 'per plass'], plassCount);
-        addProductByBestGuess(['termoplast', 'symbol', 'hc'], hcCount);     // HC symbols
-        addProductByBestGuess(['termoplast', 'symbol', 'hc'], symbolCount); // elbil/sykkel/MC → same product
-        addProductByBestGuess(['termoplast', 'rigg', 'maskiner'], riggCount);
+        addProductByBestGuess(['termoplast', 'symbol', 'hc'], hcCount);
+        addProductByBestGuess(['termoplast', 'symbol', 'hc'], symbolCount);
+    }
+
+    // Rigg / Minstepris logic – customer-dependent
+    let riggInfo = '';
+    if (isAimo) {
+        // Aimo has no rigg – instead: minstepris (8804) if subtotal < 3100
+        // Calculate current subtotal of what we just added
+        let subtotal = 0;
+        for (const [id, data] of Object.entries(selectedProducts)) {
+            const prod = PRODUCTS.find(p => p.id === parseInt(id));
+            if (prod) subtotal += prod.price * data.qty;
+        }
+        if (subtotal < 3100) {
+            addProductById(8804, 1); // Aimo minstepris innenbys
+            riggInfo = `\nMinstepris lagt til (total under 3100,-)`;
+        } else {
+            riggInfo = `\nIngen minstepris (total over 3100,-)`;
+        }
+    } else {
+        // Standard: add rigg
+        if (defaultMaterial === 'maling') {
+            addProductByBestGuess(['maling', 'rigg', 'maskiner'], 1);
+        } else {
+            addProductByBestGuess(['termoplast', 'rigg', 'maskiner'], 1);
+        }
+        riggInfo = '\nRigg lagt til.';
     }
 
     if (hasChanged) {
         renderProducts();
         updateSummary();
         const symbolInfo = symbolCount > 0 ? `\nElbil/sykkel/MC-symboler funnet: ${symbolCount}` : '';
-        alert(`🎉 AI Tolkning fullført:\n\nMateriale: ${defaultMaterial}\nPlasser funnet: ${plassCount}\nHC-symboler funnet: ${hcCount}${symbolInfo}\nRigg lagt til.`);
+        const customerInfo = detectedCustomer ? `\nKunde gjenkjent: ${detectedCustomer}` : '';
+        alert(`🎉 AI Tolkning fullført:\n\nMateriale: ${defaultMaterial}\nPlasser funnet: ${plassCount}\nHC-symboler funnet: ${hcCount}${symbolInfo}${riggInfo}${customerInfo}`);
         
         // Show swap button and setup logic
         const swapBtn = document.getElementById('ai-swap-material-btn');
