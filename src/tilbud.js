@@ -774,13 +774,40 @@ async function fetchFlaggedEmails(accountKey) {
     if (error) error.style.display = 'none';
 
     try {
-        const resp = await fetch(`/mail/flagged?account=${encodeURIComponent(accountKey)}`);
+        const reqHeaders = {};
+        const storedPwd = sessionStorage.getItem(`mail_pwd_${accountKey}`);
+        if (storedPwd) {
+            reqHeaders['X-Mail-Password'] = storedPwd;
+        }
+
+        const resp = await fetch(`/mail/flagged?account=${encodeURIComponent(accountKey)}`, {
+            headers: reqHeaders
+        });
         const data = await resp.json();
 
         if (loading) loading.style.display = 'none';
 
-        if (data.error) {
-            showEmailError(data.error);
+        if (resp.status === 401) {
+            const pwd = prompt(`Passord mangler eller er feil for kontoen '${accountKey}'.\n\nNettleseren husker passordet mens du arbeider (lagres ikke på serveren).\n\nPassord:`);
+            if (pwd) {
+                sessionStorage.setItem(`mail_pwd_${accountKey}`, pwd);
+                return fetchFlaggedEmails(accountKey); // Retry
+            } else {
+                showEmailError('Tilgang avbrutt. E-post passord kreves.');
+                return;
+            }
+        }
+
+        if (resp.status !== 200 || data.error) {
+            // Also retry if error says "Authentication failed" directly
+            if (data.error && data.error.includes('Authentication failed')) {
+                const pwd = prompt(`Feil passord for '${accountKey}'. Prøv igjen:`);
+                if (pwd) {
+                    sessionStorage.setItem(`mail_pwd_${accountKey}`, pwd);
+                    return fetchFlaggedEmails(accountKey); 
+                }
+            }
+            showEmailError(data.error || 'Ukjent feil oppstod');
             return;
         }
 
@@ -1344,9 +1371,15 @@ async function handleSendEmail() {
         // Send via backend
         const bodyText = `Hei ${customerName},\n\nTakk for din henvendelse.\n\nVedlagt finner du vårt pristilbud for det forespurte oppmerkingsarbeidet.\n\nDette tilbudet er basert på en maskinell behandling av din forespørsel. Dersom det er mangler eller feil, gi oss beskjed så korrigerer vi tilbudet.\n\nTilbudet er gyldig i 30 dager.\n\nMed vennlig hilsen\nChristiania Oppmerking AS\nTlf: +47 40 00 42 54\npost@christianiaoppmerking.no`;
 
+        const storedPwd = sessionStorage.getItem('mail_pwd_post');
+        const reqHeaders = { 'Content-Type': 'application/json' };
+        if (storedPwd) {
+            reqHeaders['X-Mail-Password'] = storedPwd;
+        }
+
         const resp = await fetch('/mail/send', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: reqHeaders,
             body: JSON.stringify({
                 to_email: toEmail,
                 subject: subject,
@@ -1355,6 +1388,22 @@ async function handleSendEmail() {
                 pdf_filename: getQuoteFilename(),
             })
         });
+
+        if (resp.status === 401) {
+            const pwd = prompt("Passord kreves for å sende e-post fra post@christianiaoppmerking.no.\n\nSkriv inn passordet ditt:");
+            if (pwd) {
+                sessionStorage.setItem('mail_pwd_post', pwd);
+                // Retry
+                if (sendBtn) {
+                    sendBtn.textContent = originalText;
+                    sendBtn.disabled = false;
+                }
+                return handleSendEmail(); 
+            } else {
+                alert("Sendeavbrutt. Passord kreves.");
+                return;
+            }
+        }
 
         const result = await resp.json();
 

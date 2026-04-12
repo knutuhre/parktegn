@@ -37,14 +37,21 @@ if os.path.exists(ENV_FILE):
                 os.environ.setdefault(key.strip(), value.strip())
 
 # Mail accounts config
-MAIL_ACCOUNTS = {}
+MAIL_ACCOUNTS = {
+    'post': {'user': 'post@christianiaoppmerking.no', 'password': ''},
+    'knut': {'user': 'knut@christianiaoppmerking.no', 'password': ''}
+}
+
+# Override with environment variables if present
 for i in range(1, 5):
     user = os.environ.get(f'MAIL_USER_{i}', '')
     pwd = os.environ.get(f'MAIL_PASS_{i}', '')
-    if user and pwd:
-        # Use part before @ as account key
+    if user:
         key = user.split('@')[0]
-        MAIL_ACCOUNTS[key] = {'user': user, 'password': pwd}
+        if key in MAIL_ACCOUNTS:
+            MAIL_ACCOUNTS[key]['password'] = pwd
+        else:
+            MAIL_ACCOUNTS[key] = {'user': user, 'password': pwd}
 
 # Keywords that suggest an email is a quote request for marking work
 QUOTE_KEYWORDS = [
@@ -275,9 +282,17 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             acc = MAIL_ACCOUNTS[account_key]
+            pwd = self.headers.get('X-Mail-Password', acc['password'])
+            
+            if not pwd:
+                self._send_json({'error': 'Password required for IMAP'}, 401)
+                return
+
             try:
-                emails = self._fetch_flagged_emails(acc['user'], acc['password'])
+                emails = self._fetch_flagged_emails(acc['user'], pwd)
                 self._send_json(emails)
+            except imaplib.IMAP4.error as e:
+                self._send_json({'error': f'Authentication failed: {str(e)}'}, 401)
             except Exception as e:
                 self._send_json({'error': f'Feil ved henting av e-post: {str(e)}'}, 500)
             return
@@ -311,7 +326,11 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             sender_email = MAIL_ACCOUNTS['post']['user']
-            sender_pass = MAIL_ACCOUNTS['post']['password']
+            sender_pass = self.headers.get('X-Mail-Password', MAIL_ACCOUNTS['post']['password'])
+            
+            if not sender_pass:
+                self._send_json({'error': 'Password required for SMTP'}, 401)
+                return
 
             # Build MIME email
             msg = MIMEMultipart()
