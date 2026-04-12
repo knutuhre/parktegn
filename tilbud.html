@@ -55,8 +55,15 @@
                 <h1>Pristilbud</h1>
             </div>
             <div style="text-align:right; font-size:9pt; color:#555;">
-                <div id="print-customer-name" style="font-size:11pt; font-weight:700; color:#111;"></div>
-                <div id="print-project-name"></div>
+                <div style="margin-bottom: 8px;">
+                    <strong style="color:#64748b; font-size:8pt; text-transform:uppercase;">Kunde / Faktura</strong>
+                    <div id="print-customer-name" style="font-size:11pt; font-weight:700; color:#111;"></div>
+                    <div id="print-customer-address"></div>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <strong style="color:#64748b; font-size:8pt; text-transform:uppercase;">Arbeidssted</strong>
+                    <div id="print-project-name"></div>
+                </div>
                 <div id="print-date"></div>
                 <div id="print-price-year"></div>
             </div>
@@ -120,15 +127,19 @@
     <section class="customer-section">
         <div class="customer-card">
             <h3>📋 Kundeinformasjon</h3>
-            <div class="customer-grid">
+            <div class="customer-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
                 <div class="customer-field">
                     <label>Kundenavn</label>
                     <input type="text" id="customer-name" placeholder="Firmanavn / Kontaktperson">
                 </div>
                 <div class="customer-field">
-                    <label>Prosjekt / Adresse</label>
+                    <label>Kundeadresse</label>
+                    <input type="text" id="customer-address" placeholder="Faktura-/Kontoradresse">
+                </div>
+                <div class="customer-field">
+                    <label>Arbeidssted (P-plass)</label>
                     <div style="display: flex; gap: 8px;">
-                        <input type="text" id="customer-project" placeholder="Prosjektnavn eller adresse" style="flex:1;">
+                        <input type="text" id="customer-project" placeholder="Gateadresse for jobben" style="flex:1;">
                         <button id="search-pregister-btn" title="Søk etter adresse i Vegvesenets P-register" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer; padding:0 12px; font-size:14px; color:#475569; display:flex; align-items:center;">
                             🚗
                         </button>

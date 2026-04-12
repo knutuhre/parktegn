@@ -1228,8 +1228,32 @@ function parseEmailTextToProducts(text) {
         hcCount += parseInt(match[1]);
     }
 
-    // Default rigg count
     const riggCount = 1;
+
+    // 3. Extract Addresses (Heuristic)
+    // Match common street formats: Capitalized word + Number (e.g. Storgata 1, Nydalsveien 22)
+    const addressRegex = /\b[A-ZÆØÅ][a-zæøå]+\s+\d+[a-zA-Z]?\b/g;
+    let foundAddresses = [];
+    let matchAddr;
+    while ((matchAddr = addressRegex.exec(text)) !== null) {
+        if (!foundAddresses.includes(matchAddr[0])) {
+            foundAddresses.push(matchAddr[0]);
+        }
+    }
+    
+    // Attempt to extract zip codes nearby
+    // If we have just 1 address, put it in project address. If 2+, assume last is office (signature), first is project
+    if (foundAddresses.length > 0) {
+        const projInput = document.getElementById('customer-project');
+        const addrInput = document.getElementById('customer-address');
+        
+        if (foundAddresses.length === 1) {
+            if (projInput) projInput.value = foundAddresses[0];
+        } else {
+            if (projInput) projInput.value = foundAddresses[0];
+            if (addrInput) addrInput.value = foundAddresses[foundAddresses.length - 1];
+        }
+    }
 
     // Use learning map if user has corrected these choices before
     const learningMap = JSON.parse(localStorage.getItem('ai_product_mapping') || '{}');
@@ -1383,6 +1407,10 @@ function preparePrintFields() {
     const printCustomerEl = $('#print-customer-name');
     if (printCustomerEl) {
         printCustomerEl.textContent = $('#customer-name')?.value || '';
+    }
+    const printCustomerAddressEl = $('#print-customer-address');
+    if (printCustomerAddressEl) {
+        printCustomerAddressEl.textContent = $('#customer-address')?.value || '';
     }
     const printProjectEl = $('#print-project-name');
     if (printProjectEl) {
