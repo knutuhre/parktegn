@@ -1559,6 +1559,12 @@ function createQuoteFromEmail(mail) {
 
 function parseEmailTextToProducts(text) {
     if (!text) return;
+    
+    // Debug: log parsed text so we can see what the parser receives
+    console.log('=== parseEmailTextToProducts ===');
+    console.log('Text length:', text.length);
+    console.log('Full text:', text);
+    
     const lowerText = text.toLowerCase();
     let hasChanged = false;
 

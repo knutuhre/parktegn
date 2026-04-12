@@ -448,7 +448,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         date_iso = date_str
 
                     # Extract body text (plain text preferred)
-                    body = self._extract_body(msg, max_chars=2000)
+                    body = self._extract_body(msg, max_chars=5000)
 
                     # Check if it looks like a quote request
                     # Strip exact company identity phrases to avoid false matches from signatures
@@ -598,10 +598,19 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                             payload = part.get_payload(decode=True)
                             if payload:
                                 html = payload.decode(charset, errors='replace')
-                                # Simple HTML stripping
                                 import re
+                                from html import unescape
+                                # Replace <br>, <p>, <div> with newlines to preserve structure
+                                html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+                                html = re.sub(r'</?(p|div|tr|li|h[1-6])[^>]*>', '\n', html, flags=re.IGNORECASE)
+                                # Strip remaining tags
                                 body = re.sub(r'<[^>]+>', ' ', html)
-                                body = re.sub(r'\s+', ' ', body).strip()
+                                # Decode HTML entities (&amp; &nbsp; etc.)
+                                body = unescape(body)
+                                # Collapse multiple spaces but keep newlines
+                                body = re.sub(r'[^\S\n]+', ' ', body)
+                                body = re.sub(r'\n{3,}', '\n\n', body)
+                                body = body.strip()
                                 break
                         except Exception:
                             continue
