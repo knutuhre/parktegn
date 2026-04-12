@@ -787,26 +787,31 @@ async function fetchFlaggedEmails(accountKey) {
 
         if (loading) loading.style.display = 'none';
 
-        if (resp.status === 401) {
-            const pwd = prompt(`Passord mangler eller er feil for kontoen '${accountKey}'.\n\nNettleseren husker passordet mens du arbeider (lagres ikke på serveren).\n\nPassord:`);
-            if (pwd) {
-                sessionStorage.setItem(`mail_pwd_${accountKey}`, pwd);
-                return fetchFlaggedEmails(accountKey); // Retry
-            } else {
-                showEmailError('Tilgang avbrutt. E-post passord kreves.');
-                return;
+        if (resp.status === 401 || (resp.status !== 200 && data.error && data.error.includes('Authentication failed'))) {
+            // Render inline password input since prompt() might be blocked on page load
+            if (empty) empty.style.display = 'none';
+            if (error) error.style.display = 'none';
+            if (list) {
+                list.innerHTML = `
+                    <div style="text-align: center; padding: 30px 20px; background: #fffcfc; border: 1px solid #ffd6d6; border-radius: 8px; margin-top: 10px;">
+                        <p style="margin-bottom: 15px; font-weight: 500; color:var(--text-color);">Passord kreves for å hente e-poster fra <b>${accountKey}</b></p>
+                        <input type="password" id="temp-pwd-input" placeholder="Passord for e-post..." style="padding: 10px; width: 80%; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 15px;">
+                        <br>
+                        <button class="primary-btn" onclick="
+                            const pwd = document.getElementById('temp-pwd-input').value;
+                            if(pwd) {
+                                sessionStorage.setItem('mail_pwd_${accountKey}', pwd);
+                                sessionStorage.setItem('mail_pwd_post', pwd); // Also save for sending
+                                fetchFlaggedEmails('${accountKey}');
+                            }
+                        ">Logg inn for denne økten</button>
+                    </div>
+                `;
             }
+            return;
         }
 
         if (resp.status !== 200 || data.error) {
-            // Also retry if error says "Authentication failed" directly
-            if (data.error && data.error.includes('Authentication failed')) {
-                const pwd = prompt(`Feil passord for '${accountKey}'. Prøv igjen:`);
-                if (pwd) {
-                    sessionStorage.setItem(`mail_pwd_${accountKey}`, pwd);
-                    return fetchFlaggedEmails(accountKey); 
-                }
-            }
             showEmailError(data.error || 'Ukjent feil oppstod');
             return;
         }
