@@ -1357,6 +1357,9 @@ async function handleSendEmail() {
     );
     if (!ok) return;
 
+    // Ask if they want a copy
+    const sendCopy = confirm('Ønsker du at det sendes en usynlig blindkopi (BCC) av tilbudet til post@christianiaoppmerking.no for arkivering?');
+
     const sendBtn = $('#send-email-btn');
     const originalText = sendBtn?.textContent;
     if (sendBtn) {
@@ -1395,6 +1398,7 @@ async function handleSendEmail() {
                 body_text: bodyText,
                 pdf_base64: pdfBase64,
                 pdf_filename: getQuoteFilename(),
+                bcc_email: sendCopy ? 'post@christianiaoppmerking.no' : ''
             })
         });
 

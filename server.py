@@ -332,11 +332,15 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'error': 'Password required for SMTP'}, 401)
                 return
 
+            bcc_email = data.get('bcc_email', '')
+
             # Build MIME email
             msg = MIMEMultipart()
             msg['From'] = f'Christiania Oppmerking AS <{sender_email}>'
             msg['To'] = to_email
             msg['Subject'] = subject
+            if bcc_email:
+                msg['Bcc'] = bcc_email
 
             # Body text
             msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
