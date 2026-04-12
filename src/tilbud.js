@@ -1609,7 +1609,7 @@ function parseEmailTextToProducts(text) {
 
     // Separate regex for elbil/sykkel/MC symbols (maps to "symboler, HC/elbil/MC/sykkel")
     let symbolCount = extractCount(text, [
-        'elbil(?:symbol)?', 'el-bil(?:symbol)?',
+        'el[- ]?symbol', 'elbil(?:symbol)?', 'el-bil(?:symbol)?',
         'sykkel(?:symbol)?', 'mc[- ]?symbol',
         'motorsykkel(?:symbol)?', 'ladesymbol', 'ladeskilt'
     ]);
