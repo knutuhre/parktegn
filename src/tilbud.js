@@ -821,10 +821,14 @@ function handleCustomerNameChange(name) {
 }
 
 async function handlePRegisterSearch() {
-    const input = $('#customer-project');
-    const query = input?.value?.trim();
+    const projInput = $('#customer-project')?.value?.trim() || '';
+    const addrInput = $('#customer-address')?.value?.trim() || '';
+    
+    // Combine them, and if empty, warn user.
+    const query = `${addrInput} ${projInput}`.trim();
+
     if (!query) {
-        alert('Skriv inn en adresse eller et prosjektnavn i adressefeltet for å søke i P-registeret.');
+        alert('Skriv inn en adresse eller et prosjektnavn i adresse(r) for å søke i P-registeret.');
         return;
     }
 
