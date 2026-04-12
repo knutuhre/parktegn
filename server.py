@@ -66,6 +66,18 @@ QUOTE_KEYWORDS = [
     'sykkelsti', 'sykkelfelt', 'fartshumper',
     'sperre', 'sperreområde', 'rutemønster',
     'pil', 'tekst på asfalt', 'symbol',
+    # Broader terms to catch more inquiries
+    'bestilling', 'bestille', 'oppdrag', 'jobb', 'arbeid',
+    'male', 'merke', 'striper', 'stripe',
+    'garasje', 'parkeringshus', 'parkeringsanlegg', 'kjeller',
+    'gulv', 'dekke', 'belegg', 'epoxy',
+    'hc', 'handikap', 'funksjonshemmet',
+    'lading', 'ladestasjon', 'lade',
+    'skilt', 'vegoppmerking',
+    'tomt', 'eiendom', 'bygg', 'prosjekt',
+    'kan dere', 'ønsker', 'trenger', 'behov',
+    'vedlikehold', 'fornye', 'fornyelse',
+    'kjøresenter', 'varemottak',
 ]
 
 

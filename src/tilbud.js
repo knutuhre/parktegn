@@ -1035,7 +1035,6 @@ function setupEmailPanel() {
     const overlay = $('#email-overlay');
     const closeBtn = $('#email-close-btn');
     const refreshBtn = $('#email-refresh-btn');
-    const accountSelect = $('#email-account-select');
 
     if (!btn || !overlay) return;
 
@@ -1060,19 +1059,9 @@ function setupEmailPanel() {
         }
     });
 
-    // Refresh
+    // Refresh – fetch from all checked accounts
     refreshBtn?.addEventListener('click', () => {
-        if (currentEmailAccount) {
-            fetchFlaggedEmails(currentEmailAccount);
-        }
-    });
-
-    // Account switch
-    accountSelect?.addEventListener('change', (e) => {
-        currentEmailAccount = e.target.value;
-        if (currentEmailAccount) {
-            fetchFlaggedEmails(currentEmailAccount);
-        }
+        fetchFromCheckedAccounts();
     });
 }
 
@@ -1091,104 +1080,163 @@ async function fetchEmailAccounts() {
         }
 
         emailAccounts = data;
-        const select = $('#email-account-select');
-        if (!select) return;
+        const container = $('#email-account-checkboxes');
+        if (!container) return;
 
-        select.innerHTML = '';
+        container.innerHTML = '';
         for (const acc of emailAccounts) {
-            const opt = document.createElement('option');
-            opt.value = acc.key;
-            opt.textContent = acc.email;
-            select.appendChild(opt);
+            const label = document.createElement('label');
+            label.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer; padding:4px 8px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px;';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = acc.key;
+            cb.checked = true; // All checked by default
+            cb.style.cssText = 'accent-color:#6366f1; cursor:pointer;';
+            cb.addEventListener('change', () => {
+                fetchFromCheckedAccounts();
+            });
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(acc.email));
+            container.appendChild(label);
         }
 
-        // Auto-select first account and fetch
+        // Auto-fetch all accounts
         if (emailAccounts.length > 0) {
-            currentEmailAccount = emailAccounts[0].key;
-            select.value = currentEmailAccount;
-            fetchFlaggedEmails(currentEmailAccount);
+            fetchFromCheckedAccounts();
         }
     } catch (e) {
         showEmailError('Kunne ikke koble til serveren. Kjører du server.py?');
     }
 }
 
-async function fetchFlaggedEmails(accountKey) {
+function getCheckedAccounts() {
+    const container = $('#email-account-checkboxes');
+    if (!container) return [];
+    return [...container.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value);
+}
+
+async function fetchFromCheckedAccounts() {
+    const accounts = getCheckedAccounts();
+    if (accounts.length === 0) {
+        cachedEmails = [];
+        renderEmailList([]);
+        updateEmailBadge(0);
+        return;
+    }
+
     const loading = $('#email-loading');
     const list = $('#email-list');
     const empty = $('#email-empty');
     const error = $('#email-error');
 
-    // Show loading
     if (loading) loading.style.display = '';
     if (list) list.innerHTML = '';
     if (empty) empty.style.display = 'none';
     if (error) error.style.display = 'none';
 
-    try {
-        const reqHeaders = {};
-        const storedPwd = sessionStorage.getItem(`mail_pwd_${accountKey}`);
-        if (storedPwd) {
-            reqHeaders['X-Mail-Password'] = storedPwd;
+    // Check if any accounts need passwords
+    const needsPwd = [];
+    for (const accKey of accounts) {
+        if (!sessionStorage.getItem(`mail_pwd_${accKey}`)) {
+            needsPwd.push(accKey);
         }
+    }
 
-        const resp = await fetch(`/mail/flagged?account=${encodeURIComponent(accountKey)}`, {
-            headers: reqHeaders
-        });
-        const data = await resp.json();
+    if (needsPwd.length > 0) {
+        // Show password input for the first account that needs one
+        const accKey = needsPwd[0];
+        if (loading) loading.style.display = 'none';
+        if (list) {
+            list.innerHTML = `
+                <div style="text-align: center; padding: 30px 20px; background: #fffcfc; border: 1px solid #ffd6d6; border-radius: 8px; margin-top: 10px;">
+                    <p style="margin-bottom: 15px; font-weight: 500; color:var(--text-color);">Passord kreves for <b>${accKey}</b></p>
+                    <input type="password" id="temp-pwd-input" placeholder="Passord for e-post..." style="padding: 10px; width: 80%; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 15px;">
+                    <br>
+                    <button class="primary-btn" onclick="
+                        const pwd = document.getElementById('temp-pwd-input').value;
+                        if(pwd) {
+                            // Save for all accounts (same password)
+                            ${accounts.map(a => `sessionStorage.setItem('mail_pwd_${a}', pwd);`).join('\n                            ')}
+                            sessionStorage.setItem('mail_pwd_post', pwd);
+                            fetchFromCheckedAccounts();
+                        }
+                    ">Logg inn for denne økten</button>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    try {
+        // Fetch from all checked accounts in parallel
+        const results = await Promise.allSettled(
+            accounts.map(accKey => fetchSingleAccount(accKey))
+        );
 
         if (loading) loading.style.display = 'none';
 
-        if (resp.status === 401 || (resp.status !== 200 && data.error && data.error.includes('Authentication failed'))) {
-            // Render inline password input since prompt() might be blocked on page load
-            if (empty) empty.style.display = 'none';
-            if (error) error.style.display = 'none';
-            if (list) {
-                list.innerHTML = `
-                    <div style="text-align: center; padding: 30px 20px; background: #fffcfc; border: 1px solid #ffd6d6; border-radius: 8px; margin-top: 10px;">
-                        <p style="margin-bottom: 15px; font-weight: 500; color:var(--text-color);">Passord kreves for å hente e-poster fra <b>${accountKey}</b></p>
-                        <input type="password" id="temp-pwd-input" placeholder="Passord for e-post..." style="padding: 10px; width: 80%; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 15px;">
-                        <br>
-                        <button class="primary-btn" onclick="
-                            const pwd = document.getElementById('temp-pwd-input').value;
-                            if(pwd) {
-                                sessionStorage.setItem('mail_pwd_${accountKey}', pwd);
-                                sessionStorage.setItem('mail_pwd_post', pwd); // Also save for sending
-                                fetchFlaggedEmails('${accountKey}');
-                            }
-                        ">Logg inn for denne økten</button>
-                    </div>
-                `;
+        // Merge all emails, tag each with its source account
+        let allEmails = [];
+        for (let i = 0; i < results.length; i++) {
+            if (results[i].status === 'fulfilled' && Array.isArray(results[i].value)) {
+                const accKey = accounts[i];
+                const filtered = filterDismissed(results[i].value, accKey);
+                for (const m of filtered) {
+                    m._accountKey = accKey;
+                    allEmails.push(m);
+                }
             }
-            return;
         }
 
-        if (resp.status !== 200 || data.error) {
-            showEmailError(data.error || 'Ukjent feil oppstod');
-            return;
-        }
+        // Sort by date (newest first)
+        allEmails.sort((a, b) => {
+            const da = new Date(a.date || 0);
+            const db = new Date(b.date || 0);
+            return db - da;
+        });
 
-        if (!Array.isArray(data) || data.length === 0) {
-            cachedEmails = [];
+        // Deduplicate by subject+from (same email might arrive on both accounts)
+        const seen = new Set();
+        allEmails = allEmails.filter(m => {
+            const key = `${m.from_email}:${m.subject}:${m.date?.substring(0,10)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        cachedEmails = allEmails;
+        currentEmailAccount = accounts.join(',');
+        updateEmailBadge(allEmails.length);
+
+        if (allEmails.length === 0) {
             if (empty) empty.style.display = '';
-            updateEmailBadge(0);
             return;
         }
 
-        cachedEmails = data;
-        const filtered = filterDismissed(data, accountKey);
-        updateEmailBadge(filtered.length);
-
-        if (filtered.length === 0) {
-            if (empty) empty.style.display = '';
-            return;
-        }
-
-        renderEmailList(filtered);
+        renderEmailList(allEmails);
     } catch (e) {
         if (loading) loading.style.display = 'none';
         showEmailError('Kunne ikke hente e-poster. Sjekk at server.py kjører.');
     }
+}
+
+async function fetchSingleAccount(accountKey) {
+    const reqHeaders = {};
+    const storedPwd = sessionStorage.getItem(`mail_pwd_${accountKey}`);
+    if (storedPwd) {
+        reqHeaders['X-Mail-Password'] = storedPwd;
+    }
+    const resp = await fetch(`/mail/flagged?account=${encodeURIComponent(accountKey)}`, {
+        headers: reqHeaders
+    });
+    if (resp.status === 401) {
+        throw new Error('auth');
+    }
+    const data = await resp.json();
+    if (resp.status !== 200 || data.error) {
+        throw new Error(data.error || 'Feil');
+    }
+    return data;
 }
 
 function renderEmailList(emails) {
