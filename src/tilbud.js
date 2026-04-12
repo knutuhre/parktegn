@@ -84,7 +84,7 @@ const PRODUCTS_RAW = [
 ];
 
 // Apply annual price adjustment
-const PRODUCTS = PRODUCTS_RAW.map(p => ({
+let PRODUCTS = PRODUCTS_RAW.map(p => ({
     ...p,
     basePrice: p.price,  // Original 2025 price
     price: Math.round(p.price * ADJUSTMENT_FACTOR),  // Adjusted price
@@ -609,6 +609,83 @@ function setupActions() {
             }
             renderProducts();
             updateSummary();
+        });
+    }
+
+    // Excel Price List upload
+    const btnUploadPrices = $('#btn-upload-prices');
+    const priceExcelInput = $('#price-excel-input');
+    const priceSourceLabel = $('#price-source-label');
+
+    if (btnUploadPrices && priceExcelInput) {
+        btnUploadPrices.addEventListener('click', () => {
+            priceExcelInput.click();
+        });
+
+        priceExcelInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const oldText = btnUploadPrices.innerHTML;
+            btnUploadPrices.innerHTML = '⏳ Leser fil...';
+            btnUploadPrices.disabled = true;
+
+            try {
+                if (typeof XLSX === 'undefined') {
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js';
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    });
+                }
+
+                const loader = await import('./utils/priceLoader.js?v=2');
+                const result = await loader.loadPriceList(file);
+                const excelList = result.priceList;
+
+                if (excelList.length === 0) {
+                    alert('Fant ingen priser i Excel-filen.');
+                    return;
+                }
+
+                let matchCount = 0;
+                for (const p of PRODUCTS) {
+                    const pNameLower = p.name.toLowerCase();
+                    const match = excelList.find(x => {
+                        const xName = x.product.toLowerCase();
+                        if (xName.length < 3) return false;
+                        return xName === pNameLower || pNameLower.includes(xName) || xName.includes(pNameLower.replace('maling, ', '').replace('termoplast, ', ''));
+                    });
+                    
+                    if (match) {
+                        const newPrice = match.customerPrice > 0 ? match.customerPrice : 
+                                        (match.discountPrice > 0 ? match.discountPrice : match.basePrice);
+                        if (newPrice > 0) {
+                            p.price = newPrice;
+                            matchCount++;
+                        }
+                    }
+                }
+
+                renderProducts();
+                updateSummary();
+                
+                alert(`Lest inn Excel: Oppdaterte ${matchCount} produkter med priser fra "${file.name}".`);
+                if (priceSourceLabel) {
+                    priceSourceLabel.textContent = file.name;
+                    priceSourceLabel.style.color = '#059669';
+                }
+
+            } catch (err) {
+                console.error(err);
+                alert('Feil ved innlesing av Excel: ' + err.message);
+            } finally {
+                btnUploadPrices.innerHTML = oldText;
+                btnUploadPrices.disabled = false;
+                priceExcelInput.value = '';
+            }
         });
     }
 
