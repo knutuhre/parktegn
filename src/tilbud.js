@@ -1333,13 +1333,17 @@ function getQuoteFilename() {
 }
 
 async function handleSendEmail() {
+    let toEmail = '';
+    let customerName = $('#customer-name')?.value || 'Kunde';
+
     if (!quoteSourceEmail) {
-        alert('Ingen e-post å svare på. Opprett tilbudet fra en e-post først.');
-        return;
+        toEmail = prompt('Skriv inn kundens e-postadresse for å sende tilbudet direkte:');
+        if (!toEmail) return; // User cancelled
+    } else {
+        toEmail = quoteSourceEmail.from_email;
+        customerName = quoteSourceEmail.from_name || toEmail;
     }
 
-    const toEmail = quoteSourceEmail.from_email;
-    const customerName = quoteSourceEmail.from_name || toEmail;
     const subject = `Pristilbud – ${$('#customer-project')?.value || 'Oppmerking'}`;
 
     // Confirm before sending
