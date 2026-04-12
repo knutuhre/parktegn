@@ -415,7 +415,7 @@ function createProductRow(p) {
         </div>
         <div class="qty-controls">
             <button class="qty-btn qty-minus" data-id="${p.id}">−</button>
-            <input type="number" class="qty-input" value="${qty}" min="1" max="9999" data-id="${p.id}">
+            <input type="number" class="qty-input" value="${qty}" min="0" max="9999" data-id="${p.id}">
             <button class="qty-btn qty-plus" data-id="${p.id}">+</button>
         </div>
         <span class="product-price">${formatKr(unitPrice)}</span>
@@ -463,8 +463,8 @@ function createProductRow(p) {
     });
     row.querySelector('.qty-input').addEventListener('change', (e) => {
         e.stopPropagation();
-        const val = parseInt(e.target.value) || 1;
-        setQty(p.id, Math.max(1, val));
+        const val = parseInt(e.target.value) || 0;
+        setQty(p.id, val);
     });
     row.querySelector('.qty-input').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -488,16 +488,25 @@ function changeQty(id, delta) {
     if (!selectedProducts[id]) {
         selectedProducts[id] = { qty: 1 };
     }
-    selectedProducts[id].qty = Math.max(1, selectedProducts[id].qty + delta);
+    const newQty = selectedProducts[id].qty + delta;
+    if (newQty <= 0) {
+        delete selectedProducts[id];
+    } else {
+        selectedProducts[id].qty = newQty;
+    }
     renderProducts();
     updateSummary();
 }
 
 function setQty(id, qty) {
-    if (!selectedProducts[id]) {
-        selectedProducts[id] = { qty: 1 };
+    if (qty <= 0) {
+        delete selectedProducts[id];
+    } else {
+        if (!selectedProducts[id]) {
+            selectedProducts[id] = { qty: 1 };
+        }
+        selectedProducts[id].qty = qty;
     }
-    selectedProducts[id].qty = qty;
     renderProducts();
     updateSummary();
 }
