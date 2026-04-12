@@ -4,7 +4,7 @@
  */
 
 // ===== Configuration =====
-const PRICE_BASE_YEAR = 2025;           // Year the prices are from
+const PRICE_BASE_YEAR = 2026;           // Year the prices are from
 const ANNUAL_ADJUSTMENT_PCT = 3;        // Annual price increase percentage
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -12,16 +12,16 @@ const CURRENT_YEAR = new Date().getFullYear();
 const yearsDiff = CURRENT_YEAR - PRICE_BASE_YEAR;
 const ADJUSTMENT_FACTOR = Math.pow(1 + ANNUAL_ADJUSTMENT_PCT / 100, yearsDiff);
 
-// ===== Product Data (Prisliste 2025 - NCC) =====
-// Prices are 2025 eks. MVA — adjusted to current year automatically
+// ===== Product Data (Prisliste 2026 - Formatert) =====
+// Prices are 2026 eks. MVA — adjusted to current year automatically
 const PRODUCTS_RAW = [
     // --- Termoplast ---
-    { id: 3202, cat: 'Termoplast',     name: 'Termoplast, 10cm linje, HVIT',                    unit: 'lm',       price: 42 },
+    { id: 3202, cat: 'Termoplast',     name: 'Termoplast, 10cm linje, HVIT',                    unit: 'lm',       price: 43 },
     { id: 3203, cat: 'Termoplast',     name: 'Termoplast, 10cm linje, HVIT, per plass',          unit: 'plass',    price: 310 },
-    { id: 3204, cat: 'Termoplast',     name: 'Termoplast, Pil, Rett',                            unit: 'stk',      price: 940 },
-    { id: 3205, cat: 'Termoplast',     name: 'Termoplast, Pil, Sving',                           unit: 'stk',      price: 995 },
-    { id: 3206, cat: 'Termoplast',     name: 'Termoplast, Symbol, HC',                           unit: 'stk',      price: 1300 },
-    { id: 3207, cat: 'Termoplast',     name: 'Termoplast, 50cm, Gangfelt',                       unit: 'lm',       price: 172 },
+    { id: 3204, cat: 'Termoplast',     name: 'Termoplast, Pil, Rett',                            unit: 'stk',      price: 1320 },
+    { id: 3205, cat: 'Termoplast',     name: 'Termoplast, Pil, Sving',                           unit: 'stk',      price: 1430 },
+    { id: 3206, cat: 'Termoplast',     name: 'Termoplast, Symbol, HC',                           unit: 'stk',      price: 1370 },
+    { id: 3207, cat: 'Termoplast',     name: 'Termoplast, 50cm, Gangfelt',                       unit: 'lm',       price: 182 },
     { id: 3208, cat: 'Termoplast',     name: 'Termoplast, 50x50cm, Fartshump',                   unit: 'stk',      price: 100 },
     { id: 3209, cat: 'Termoplast',     name: 'Termoplast, Symbol, Vikelinje',                    unit: 'stk',      price: 248 },
     { id: 3210, cat: 'Termoplast',     name: 'Termoplast, per kvm',                              unit: 'kvm',      price: 345 },
@@ -30,39 +30,41 @@ const PRODUCTS_RAW = [
     { id: 3213, cat: 'Termoplast',     name: 'Termoplast, 25cm linje, HVIT',                     unit: 'lm',       price: 126 },
     { id: 3214, cat: 'Termoplast',     name: 'Termoplast, Nummer / Bokstaver (På gulv)',          unit: 'stk',      price: 460 },
     { id: 3281, cat: 'Termoplast',     name: 'Termoplast, Formerking',                           unit: 'time',     price: 1850 },
-    { id: 3291, cat: 'Termoplast',     name: 'Termoplast, Rigg, maskiner og utstyr',             unit: 'oppmøte',  price: 6700 },
+    { id: 3291, cat: 'Termoplast',     name: 'Termoplast, Rigg, maskiner og utstyr',             unit: 'oppmøte',  price: 7050 },
 
     // --- Prefabrikert ---
     { id: 3301, cat: 'Prefabrikert',   name: 'Prefabrikert, 10cm linje, HVIT',                   unit: 'lm',       price: 130 },
     { id: 3302, cat: 'Prefabrikert',   name: 'Prefabrikert, 10cm linje, GUL',                    unit: 'lm',       price: 135 },
-    { id: 3303, cat: 'Prefabrikert',   name: 'Prefabrikert, Pil, Rett',                          unit: 'stk',      price: 1250 },
-    { id: 3304, cat: 'Prefabrikert',   name: 'Prefabrikert, Pil, Sving',                         unit: 'stk',      price: 1360 },
+    { id: 3303, cat: 'Prefabrikert',   name: 'Prefabrikert, Pil, Rett',                          unit: 'stk',      price: 1320 },
+    { id: 3304, cat: 'Prefabrikert',   name: 'Prefabrikert, Pil, Sving',                         unit: 'stk',      price: 1430 },
     { id: 3305, cat: 'Prefabrikert',   name: 'Prefabrikert, 50cm, Gangfelt',                     unit: 'lm',       price: 172 },
-    { id: 3306, cat: 'Prefabrikert',   name: 'Prefabrikert, Symbol, HC/elbil/MC/sykkel',         unit: 'stk',      price: 1350 },
+    { id: 3306, cat: 'Prefabrikert',   name: 'Prefabrikert, Symbol, HC/elbil/MC/sykkel',         unit: 'stk',      price: 1420 },
     { id: 3307, cat: 'Prefabrikert',   name: 'Prefabrikert, Symbol, Vikelinje 1022',             unit: 'stk',      price: 248 },
     { id: 3391, cat: 'Prefabrikert',   name: 'Prefabrikert, Rigg, maskiner og utstyr',           unit: 'oppmøte',  price: 3000 },
 
     // --- Maling ---
-    { id: 4202, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, remerking',               unit: 'lm',       price: 18 },
-    { id: 4203, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, nymerking (inkl. oppmåling)', unit: 'lm',   price: 25 },
-    { id: 4204, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, per plass, remerking',    unit: 'plass',    price: 130 },
-    { id: 4205, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, per plass, nymerking',    unit: 'plass',    price: 175 },
-    { id: 4206, cat: 'Maling',        name: 'Maling, 10cm linje, GUL, remerking',                unit: 'lm',       price: 21 },
-    { id: 4207, cat: 'Maling',        name: 'Maling, 10cm linje, GUL, nymerking (inkl. oppmåling)', unit: 'lm',    price: 25 },
-    { id: 4208, cat: 'Maling',        name: 'Maling, symboler, HC/elbil/MC/sykkel',              unit: 'stk',      price: 550 },
-    { id: 4209, cat: 'Maling',        name: 'Maling, Pil, Rett, opp til 1,6m',                   unit: 'stk',      price: 610 },
-    { id: 4210, cat: 'Maling',        name: 'Maling, Pil, Sving, opp til 1,6m',                  unit: 'stk',      price: 720 },
-    { id: 4211, cat: 'Maling',        name: 'Maling, 50cm, Gangfelt',                            unit: 'lm',       price: 175 },
+    { id: 4202, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, remerking',               unit: 'lm',       price: 19 },
+    { id: 4203, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, nymerking (inkl. oppmåling)', unit: 'lm',   price: 27 },
+    { id: 4204, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, per plass, remerking',    unit: 'plass',    price: 137 },
+    { id: 4205, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, per plass, nymerking',    unit: 'plass',    price: 184 },
+    { id: 4206, cat: 'Maling',        name: 'Maling, 10cm linje, GUL, remerking',                unit: 'lm',       price: 22 },
+    { id: 4207, cat: 'Maling',        name: 'Maling, 10cm linje, GUL, nymerking (inkl. oppmåling)', unit: 'lm',    price: 26 },
+    { id: 4208, cat: 'Maling',        name: 'Maling, symboler, HC/elbil/MC/sykkel',              unit: 'stk',      price: 578 },
+    { id: 4209, cat: 'Maling',        name: 'Maling, Pil, Rett, opp til 1,6m',                   unit: 'stk',      price: 645 },
+    { id: 4210, cat: 'Maling',        name: 'Maling, Pil, Sving, opp til 1,6m',                  unit: 'stk',      price: 760 },
+    { id: 4211, cat: 'Maling',        name: 'Maling, 50cm, Gangfelt',                            unit: 'lm',       price: 185 },
     { id: 4212, cat: 'Maling',        name: 'Maling, Symbol, Vikelinje',                         unit: 'stk',      price: 135 },
+    { id: 4213, cat: 'Maling',        name: 'Maling, Symbol, farget bakgrunn',                   unit: 'stk',      price: 1890 },
     { id: 4214, cat: 'Maling',        name: 'Maling, Nummer / Bokstaver (På gulv)',               unit: 'stk',      price: 155 },
     { id: 4215, cat: 'Maling',        name: 'Maling, Pr. kvm, Alle farger',                      unit: 'kvm',      price: 320 },
-    { id: 4216, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, 4 siders plass, nymerking', unit: 'lm',     price: 22 },
+    { id: 4216, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, 4 siders plass, nymerking', unit: 'lm',     price: 27 },
+    { id: 4217, cat: 'Maling',        name: 'Maling, 10cm linje, HVIT, 4 siders plass, nymerking', unit: 'lm',     price: 27 },
     { id: 4230, cat: 'Maling',        name: 'Maling, 10cm linje, Sverting linjer (male sort)',    unit: 'lm',       price: 23 },
     { id: 4291, cat: 'Maling',        name: 'Maling, Rigg, maskiner og utstyr',                  unit: 'oppmøte',  price: 2400 },
     { id: 4292, cat: 'Maling',        name: 'Maling, Rigg, tillegg for annen farge',             unit: 'oppmøte',  price: 700 },
 
     // --- Demarkering ---
-    { id: 2501, cat: 'Demarkering',   name: 'Demarkering av termoplast, Fjerning 10cm linje',    unit: 'lm',       price: 162 },
+    { id: 2501, cat: 'Demarkering',   name: 'Demarkering av termoplast, Fjerning 10cm linje',    unit: 'lm',       price: 170 },
     { id: 2502, cat: 'Demarkering',   name: 'Demarkering av termoplast, Fjerning symboler',      unit: 'stk',      price: 675 },
     { id: 2503, cat: 'Demarkering',   name: 'Demarkering av maling, Fjerning 10cm linje',        unit: 'lm',       price: 111 },
     { id: 2504, cat: 'Demarkering',   name: 'Demarkering av maling, Fjerning symboler',          unit: 'stk',      price: 611 },
@@ -76,10 +78,11 @@ const PRODUCTS_RAW = [
     // --- Tillegg og kjøring ---
     { id: 8801, cat: 'Tillegg',       name: 'Kjøring per km, utenfor Oslo',                      unit: 'km',       price: 7 },
     { id: 8802, cat: 'Tillegg',       name: 'Kjøretid operatører, utenfor Oslo (2 pers)',         unit: 'time',     price: 640 },
+    { id: 8804, cat: 'Tillegg',       name: 'Aimo, Minstepris på ett oppdrag innenbys',          unit: 'stk',      price: 1607 },
     { id: 8807, cat: 'Tillegg',       name: 'Tillegg for lite oppdrag under 3100 kr, Oslo',       unit: 'stk',      price: 1600 },
     { id: 8808, cat: 'Tillegg',       name: 'Tillegg for lite oppdrag under 3100 kr, utenfor Oslo', unit: 'stk',    price: 1700 },
     { id: 8809, cat: 'Tillegg',       name: 'Tørk, tørking før merking høst/vinter/vår',         unit: 'time',     price: 2200 },
-    { id: 8811, cat: 'Tillegg',       name: 'Bompasseringer, Oslo',                              unit: 'oppmøte',  price: 70 },
+    { id: 8811, cat: 'Tillegg',       name: 'Bompasseringer, Oslo',                              unit: 'oppmøte',  price: 74 },
     { id: 8893, cat: 'Tillegg',       name: 'Teiping av p-plasser',                              unit: 'stk',      price: 990 },
 ];
 
