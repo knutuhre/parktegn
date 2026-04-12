@@ -5,7 +5,7 @@
 
 import { fetchAllParkingAreas, fetchParkingArea, searchByAddress, extractAreaInfo, getSkiltplanUrl } from './api/vegvesen.js?v=17';
 import { loadPdf } from './utils/pdfLoader.js';
-import { CanvasManager } from './canvas/canvasManager.js?v=19';
+import { CanvasManager } from './canvas/canvasManager.js?v=32';
 import { loadPriceList, matchPrices } from './utils/priceLoader.js';
 
 // ===== State =====
@@ -755,29 +755,43 @@ function setupToolbar() {
 function openPriceQuote() {
     if (!canvasManager) return;
 
-    const priceModal = $('#price-modal');
-    priceModal.classList.remove('hidden');
+    // Capture canvas as image
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvasManager.bgWidth || 1920;
+    exportCanvas.height = canvasManager.bgHeight || 1080;
+    const ctx = exportCanvas.getContext('2d');
 
-    // Render the table with current element counts
-    renderPriceTable();
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
 
-    // Setup file upload
-    setupPriceUpload();
+    // Draw background image
+    if (canvasManager.backgroundImage) {
+        ctx.drawImage(canvasManager.backgroundImage, 0, 0);
+    }
 
-    // Close button
-    $('#price-close').onclick = () => priceModal.classList.add('hidden');
+    // Draw elements
+    for (const el of canvasManager.elements) {
+        canvasManager._renderElement(ctx, el);
+    }
 
-    // ESC to close
-    const escHandler = (e) => {
-        if (e.key === 'Escape' && !priceModal.classList.contains('hidden')) {
-            priceModal.classList.add('hidden');
-        }
-    };
-    document.removeEventListener('keydown', escHandler);
-    document.addEventListener('keydown', escHandler);
+    // Get element counts and line items
+    const lineItems = canvasManager.getPriceLineItems();
+    const drawingImage = exportCanvas.toDataURL('image/jpeg', 0.7);
 
-    // Print button
-    $('#price-print-btn').onclick = () => window.print();
+    // Store in sessionStorage for tilbud.html
+    try {
+        sessionStorage.setItem('tilbud_drawing', JSON.stringify({
+            image: drawingImage,
+            lineItems: lineItems,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.warn('Could not store drawing data:', e);
+    }
+
+    // Navigate to tilbud page
+    window.location.href = 'tilbud.html';
 }
 
 function setupPriceUpload() {

@@ -12,10 +12,54 @@ import json
 import os
 import sys
 import ssl
+import imaplib
+import email as email_lib
+from email.header import decode_header
+from datetime import datetime, timedelta
+import base64
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 
 PORT = int(os.environ.get('PORT', 8080))
 VEGVESEN_BASE = 'https://parkreg-open.atlas.vegvesen.no/ws/no/vegvesen/veg/parkeringsomraade/parkeringsregisteret/v1'
 STATIC_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load .env file for mail credentials
+ENV_FILE = os.path.join(STATIC_DIR, '.env')
+if os.path.exists(ENV_FILE):
+    with open(ENV_FILE) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, _, value = line.partition('=')
+                os.environ.setdefault(key.strip(), value.strip())
+
+# Mail accounts config
+MAIL_ACCOUNTS = {}
+for i in range(1, 5):
+    user = os.environ.get(f'MAIL_USER_{i}', '')
+    pwd = os.environ.get(f'MAIL_PASS_{i}', '')
+    if user and pwd:
+        # Use part before @ as account key
+        key = user.split('@')[0]
+        MAIL_ACCOUNTS[key] = {'user': user, 'password': pwd}
+
+# Keywords that suggest an email is a quote request for marking work
+QUOTE_KEYWORDS = [
+    'tilbud', 'pris', 'prise', 'anbud', 'anbudsforespørsel',
+    'oppmerking', 'merking', 'vegmerking', 'oppmerke',
+    'parkering', 'parkeringsplass', 'p-plass', 'hc-plass',
+    'maling', 'termoplast', 'demarkering', 'kaldplast',
+    'gangfelt', 'fotgjengerfelt', 'linje', 'linjemerking',
+    'skilting', 'asfalt', 'elbil', 'strekning',
+    'forespørsel', 'pristilbud', 'kostnadsoverslag', 'estimat',
+    'befaring', 'befar', 'oppmåling',
+    'sykkelsti', 'sykkelfelt', 'fartshumper',
+    'sperre', 'sperreområde', 'rutemønster',
+    'pil', 'tekst på asfalt', 'symbol',
+]
 
 
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
@@ -27,6 +71,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/api/'):
             self._proxy_request()
+        elif self.path.startswith('/mail/'):
+            self._handle_mail()
         elif self.path.startswith('/maps/'):
             self._proxy_maps()
         elif self.path.startswith('/streetview/'):
@@ -39,6 +85,16 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self._add_cors_headers()
         self.end_headers()
+
+    def do_POST(self):
+        """Handle POST requests."""
+        if self.path.startswith('/mail/send'):
+            self._handle_send_mail()
+        else:
+            self.send_response(404)
+            self._add_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Not found'}).encode())
 
     def _proxy_request(self):
         # Strip /api/ prefix and build Vegvesen URL
@@ -192,6 +248,334 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             error_msg = json.dumps({'error': f'Street View proxy error: {str(e)}'})
             self.wfile.write(error_msg.encode())
 
+    # ===== Mail (IMAP) handler =====
+
+    def _handle_mail(self):
+        """Handle /mail/* requests for flagged email scanning."""
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        params = urllib.parse.parse_qs(parsed.query)
+
+        if path == '/mail/accounts':
+            # Return list of configured accounts
+            accounts = []
+            for key, acc in MAIL_ACCOUNTS.items():
+                accounts.append({'key': key, 'email': acc['user']})
+            self._send_json(accounts)
+            return
+
+        if path == '/mail/flagged':
+            account_key = params.get('account', [''])[0]
+
+            if not account_key and MAIL_ACCOUNTS:
+                account_key = list(MAIL_ACCOUNTS.keys())[0]
+
+            if account_key not in MAIL_ACCOUNTS:
+                self._send_json({'error': f'Ukjent konto: {account_key}. Tilgjengelige: {list(MAIL_ACCOUNTS.keys())}'}, 400)
+                return
+
+            acc = MAIL_ACCOUNTS[account_key]
+            try:
+                emails = self._fetch_flagged_emails(acc['user'], acc['password'])
+                self._send_json(emails)
+            except Exception as e:
+                self._send_json({'error': f'Feil ved henting av e-post: {str(e)}'}, 500)
+            return
+
+        self._send_json({'error': 'Ukjent mail-endepunkt'}, 404)
+
+    def _handle_send_mail(self):
+        """Handle POST /mail/send – send an email with PDF attachment via SMTP."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode('utf-8'))
+
+            to_email = data.get('to_email', '')
+            subject = data.get('subject', 'Pristilbud – Christiania Oppmerking AS')
+            body_text = data.get('body_text', '')
+            pdf_base64 = data.get('pdf_base64', '')
+            pdf_filename = data.get('pdf_filename', 'Tilbud.pdf')
+
+            if not to_email:
+                self._send_json({'error': 'Mangler mottaker-e-post'}, 400)
+                return
+
+            if not pdf_base64:
+                self._send_json({'error': 'Mangler PDF-data'}, 400)
+                return
+
+            # Use 'post' account for sending
+            if 'post' not in MAIL_ACCOUNTS:
+                self._send_json({'error': 'post@-kontoen er ikke konfigurert'}, 500)
+                return
+
+            sender_email = MAIL_ACCOUNTS['post']['user']
+            sender_pass = MAIL_ACCOUNTS['post']['password']
+
+            # Build MIME email
+            msg = MIMEMultipart()
+            msg['From'] = f'Christiania Oppmerking AS <{sender_email}>'
+            msg['To'] = to_email
+            msg['Subject'] = subject
+
+            # Body text
+            msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+
+            # PDF attachment
+            pdf_bytes = base64.b64decode(pdf_base64)
+            pdf_part = MIMEApplication(pdf_bytes, _subtype='pdf')
+            pdf_part.add_header('Content-Disposition', 'attachment', filename=pdf_filename)
+            msg.attach(pdf_part)
+
+            # Send via One.com SMTP
+            print(f'  📧 Sender e-post til {to_email}...')
+            with smtplib.SMTP_SSL('send.one.com', 465) as smtp:
+                smtp.login(sender_email, sender_pass)
+                smtp.send_message(msg)
+
+            print(f'  ✅ E-post sendt til {to_email}')
+            self._send_json({'success': True, 'message': f'Tilbud sendt til {to_email}'})
+
+        except smtplib.SMTPAuthenticationError:
+            print(f'  ❌ SMTP-autentisering feilet')
+            self._send_json({'error': 'SMTP-innlogging feilet. Sjekk passord i .env'}, 500)
+        except Exception as e:
+            print(f'  ❌ Feil ved sending: {e}')
+            self._send_json({'error': f'Kunne ikke sende e-post: {str(e)}'}, 500)
+
+    def _fetch_flagged_emails(self, username, password, days_back=30):
+        """Connect to One.com IMAP and fetch relevant emails from last N days."""
+        imap_host = 'imap.one.com'
+        imap_port = 993
+
+        # Calculate date filter
+        since_date = (datetime.now() - timedelta(days=days_back)).strftime('%d-%b-%Y')
+
+        mail = imaplib.IMAP4_SSL(imap_host, imap_port)
+        try:
+            mail.login(username, password)
+            mail.select('INBOX', readonly=True)
+
+            # Search ALL emails since date (not just flagged)
+            status, msg_ids = mail.search(None, f'(SINCE {since_date})')
+            if status != 'OK' or not msg_ids[0]:
+                return []
+
+            id_list = msg_ids[0].split()
+            emails = []
+
+            for msg_id in id_list:
+                try:
+                    status, msg_data = mail.fetch(msg_id, '(RFC822)')
+                    if status != 'OK':
+                        continue
+
+                    raw_email = msg_data[0][1]
+                    msg = email_lib.message_from_bytes(raw_email)
+
+                    # Decode subject
+                    subject = self._decode_mime_header(msg.get('Subject', '(Uten emne)'))
+
+                    # Decode sender
+                    from_raw = msg.get('From', '')
+                    from_name, from_email_addr = self._parse_from(from_raw)
+
+                    # Skip emails from own domain (sent by ourselves)
+                    if 'christianiaoppmerking.no' in from_email_addr.lower():
+                        continue
+
+                    # Parse date
+                    date_str = msg.get('Date', '')
+                    try:
+                        date_parsed = email_lib.utils.parsedate_to_datetime(date_str)
+                        date_iso = date_parsed.isoformat()
+                    except Exception:
+                        date_iso = date_str
+
+                    # Extract body text (plain text preferred)
+                    body = self._extract_body(msg, max_chars=2000)
+
+                    # Check if it looks like a quote request
+                    # Strip exact company identity phrases to avoid false matches from signatures
+                    combined_text = (subject + ' ' + body).lower()
+                    for noise in ['christiania oppmerking as', 'christiania oppmerking',
+                                  'post@christianiaoppmerking.no', 'knut@christianiaoppmerking.no',
+                                  'www.christianiaoppmerking.no', 'christianiaoppmerking.no']:
+                        combined_text = combined_text.replace(noise, '')
+                    is_quote = any(kw in combined_text for kw in QUOTE_KEYWORDS)
+
+                    # Only include emails that look like quote requests
+                    if not is_quote:
+                        continue
+
+                    # Extract image attachments as base64
+                    images = self._extract_images(msg, max_images=5, max_size_bytes=2*1024*1024)
+
+                    emails.append({
+                        'id': msg_id.decode(),
+                        'subject': subject,
+                        'from_name': from_name,
+                        'from_email': from_email_addr,
+                        'date': date_iso,
+                        'body_preview': body[:500] + ('...' if len(body) > 500 else ''),
+                        'full_body': body,
+                        'is_quote_request': is_quote,
+                        'images': images,
+                    })
+
+                except Exception as e:
+                    print(f'  Warning: Could not parse email {msg_id}: {e}')
+                    continue
+
+            # Sort by date, newest first
+            emails.sort(key=lambda x: x.get('date', ''), reverse=True)
+            return emails
+
+        finally:
+            try:
+                mail.logout()
+            except Exception:
+                pass
+
+    def _decode_mime_header(self, header):
+        """Decode a MIME-encoded header string."""
+        if not header:
+            return ''
+        try:
+            parts = decode_header(header)
+        except Exception:
+            return str(header)
+        decoded = []
+        for part, charset in parts:
+            if isinstance(part, bytes):
+                # Handle unknown/invalid charsets
+                try:
+                    decoded.append(part.decode(charset or 'utf-8', errors='replace'))
+                except (LookupError, UnicodeDecodeError):
+                    decoded.append(part.decode('latin-1', errors='replace'))
+            else:
+                decoded.append(part)
+        return ' '.join(decoded)
+
+    def _parse_from(self, from_raw):
+        """Parse 'Name <email>' format into (name, email)."""
+        from_decoded = self._decode_mime_header(from_raw)
+        if '<' in from_decoded and '>' in from_decoded:
+            name = from_decoded.split('<')[0].strip().strip('"')
+            addr = from_decoded.split('<')[1].split('>')[0].strip()
+            return name or addr, addr
+        return from_decoded, from_decoded
+
+    def _extract_images(self, msg, max_images=5, max_size_bytes=2*1024*1024):
+        """Extract image attachments and inline images from email as base64 data URLs."""
+        images = []
+        IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'}
+
+        if not msg.is_multipart():
+            return images
+
+        for part in msg.walk():
+            if len(images) >= max_images:
+                break
+
+            content_type = part.get_content_type()
+            if content_type not in IMAGE_TYPES:
+                continue
+
+            try:
+                payload = part.get_payload(decode=True)
+                if not payload or len(payload) > max_size_bytes:
+                    continue
+
+                # Get filename
+                filename = part.get_filename()
+                if filename:
+                    filename = self._decode_mime_header(filename)
+                else:
+                    ext = content_type.split('/')[-1]
+                    filename = f'bilde_{len(images) + 1}.{ext}'
+
+                # Convert to base64 data URL
+                b64 = base64.b64encode(payload).decode('ascii')
+                data_url = f'data:{content_type};base64,{b64}'
+
+                images.append({
+                    'filename': filename,
+                    'content_type': content_type,
+                    'size': len(payload),
+                    'data_url': data_url,
+                })
+
+            except Exception as e:
+                print(f'  Warning: Could not extract image: {e}')
+                continue
+
+        return images
+
+    def _extract_body(self, msg, max_chars=2000):
+        """Extract plain text body from email message."""
+        body = ''
+
+        if msg.is_multipart():
+            for part in msg.walk():
+                content_type = part.get_content_type()
+                content_disposition = str(part.get('Content-Disposition', ''))
+
+                if content_type == 'text/plain' and 'attachment' not in content_disposition:
+                    try:
+                        charset = part.get_content_charset() or 'utf-8'
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            try:
+                                body = payload.decode(charset, errors='replace')
+                            except (LookupError, UnicodeDecodeError):
+                                body = payload.decode('latin-1', errors='replace')
+                            break
+                    except Exception:
+                        continue
+
+            # Fallback to HTML if no plain text found
+            if not body:
+                for part in msg.walk():
+                    if part.get_content_type() == 'text/html':
+                        try:
+                            charset = part.get_content_charset() or 'utf-8'
+                            payload = part.get_payload(decode=True)
+                            if payload:
+                                html = payload.decode(charset, errors='replace')
+                                # Simple HTML stripping
+                                import re
+                                body = re.sub(r'<[^>]+>', ' ', html)
+                                body = re.sub(r'\s+', ' ', body).strip()
+                                break
+                        except Exception:
+                            continue
+        else:
+            try:
+                charset = msg.get_content_charset() or 'utf-8'
+                payload = msg.get_payload(decode=True)
+                if payload:
+                    body = payload.decode(charset, errors='replace')
+            except Exception:
+                body = ''
+
+        # Clean up and truncate
+        body = body.strip()
+        if len(body) > max_chars:
+            body = body[:max_chars] + '...'
+        return body
+
+    def _send_json(self, data, status=200):
+        """Send a JSON response."""
+        body = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self._add_cors_headers()
+        self.end_headers()
+        self.wfile.write(body)
+
     def _add_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
@@ -217,6 +601,11 @@ if __name__ == '__main__':
     print(f'🅿️  ParkTegn Server')
     print(f'   Serving static files from: {STATIC_DIR}')
     print(f'   API proxy: /api/* → {VEGVESEN_BASE}/')
+    if MAIL_ACCOUNTS:
+        accounts_str = ', '.join(MAIL_ACCOUNTS.keys())
+        print(f'   📧 E-post: {len(MAIL_ACCOUNTS)} konto(er) konfigurert ({accounts_str})')
+    else:
+        print(f'   📧 E-post: Ingen kontoer konfigurert (sjekk .env)')
     print(f'   Open: http://localhost:{PORT}')
     print()
 

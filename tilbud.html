@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="no">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pristilbud – Christiania Oppmerking AS</title>
+    <meta name="description" content="Lag pristilbud for vegmerking og oppmerking – Christiania Oppmerking AS">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="src/tilbud.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+</head>
+
+<body>
+    <!-- ===== Print-only Company Header (Letterhead) ===== -->
+    <div class="print-letterhead">
+        <div class="print-letterhead-inner">
+            <div class="print-letterhead-left">
+                <img src="src/logo-christiania.png" alt="Christiania Oppmerking AS – 20 år" class="print-letterhead-logo">
+                <div class="print-letterhead-company">
+                    <h2>Christiania Oppmerking AS</h2>
+                </div>
+            </div>
+            <div class="print-letterhead-right">
+                <div class="print-letterhead-contact">
+                    <div class="print-contact-row">
+                        <span class="print-contact-label">Telefon:</span>
+                        <span>+47 40 00 42 54</span>
+                    </div>
+                    <div class="print-contact-row">
+                        <span class="print-contact-label">E-post:</span>
+                        <span>post@christianiaoppmerking.no</span>
+                    </div>
+                    <div class="print-contact-row">
+                        <span class="print-contact-label">Adresse:</span>
+                        <span>Trollåsveien 4, 1414 Trollåsen</span>
+                    </div>
+                    <div class="print-contact-row">
+                        <span class="print-contact-label">Web:</span>
+                        <span>christianiaoppmerking.no</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="print-letterhead-divider"></div>
+    </div>
+
+    <!-- ===== Print-only Quote Info ===== -->
+    <div class="print-header">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+            <div>
+                <h1>Pristilbud</h1>
+            </div>
+            <div style="text-align:right; font-size:9pt; color:#555;">
+                <div id="print-customer-name" style="font-size:11pt; font-weight:700; color:#111;"></div>
+                <div id="print-project-name"></div>
+                <div id="print-date"></div>
+                <div id="print-price-year"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Header ===== -->
+    <header class="tilbud-header">
+        <div class="tilbud-header-left">
+            <div class="tilbud-logo">
+                <img src="src/logo-christiania.png" alt="Logo" style="height:36px;">
+                <h1>Tilbud</h1>
+                <span class="subtitle">Christiania Oppmerking AS</span>
+            </div>
+        </div>
+        <div class="tilbud-header-right">
+            <span id="price-year-info" style="font-size:0.75rem; color:var(--text-muted);"></span>
+            <button class="btn-email" id="email-btn" title="Forespørsler fra e-post">
+                📧 Forespørsler
+                <span class="email-badge" id="email-badge" style="display:none;">0</span>
+            </button>
+            <a href="index.html" class="btn-outline" style="text-decoration:none;">
+                🅿️ Tegneprogram
+            </a>
+        </div>
+    </header>
+
+    <!-- ===== Email Panel (slide-in) ===== -->
+    <div class="email-overlay" id="email-overlay">
+        <div class="email-panel" id="email-panel">
+            <div class="email-panel-header">
+                <div class="email-panel-title">
+                    <h2>📧 Forespørsler</h2>
+                    <p class="email-panel-subtitle">E-poster med forespørsel om oppmerking siste 30 dager</p>
+                </div>
+                <div class="email-panel-controls">
+                    <select id="email-account-select" class="email-account-dropdown">
+                        <option value="">Laster kontoer...</option>
+                    </select>
+                    <button class="email-refresh-btn" id="email-refresh-btn" title="Oppdater">🔄</button>
+                    <button class="email-close-btn" id="email-close-btn">✕</button>
+                </div>
+            </div>
+            <div class="email-panel-body" id="email-panel-body">
+                <div class="email-loading" id="email-loading">
+                    <div class="email-spinner"></div>
+                    <p>Henter e-poster fra One.com...</p>
+                </div>
+                <div class="email-list" id="email-list"></div>
+                <div class="email-empty" id="email-empty" style="display:none;">
+                    <p>📭 Ingen forespørsler funnet i siste 30 dager</p>
+                </div>
+                <div class="email-error" id="email-error" style="display:none;">
+                    <p id="email-error-msg">Feil ved henting av e-post</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Customer Info ===== -->
+    <section class="customer-section">
+        <div class="customer-card">
+            <h3>📋 Kundeinformasjon</h3>
+            <div class="customer-grid">
+                <div class="customer-field">
+                    <label>Kundenavn</label>
+                    <input type="text" id="customer-name" placeholder="Firmanavn / Kontaktperson">
+                </div>
+                <div class="customer-field">
+                    <label>Prosjekt / Adresse</label>
+                    <input type="text" id="customer-project" placeholder="Prosjektnavn eller adresse">
+                </div>
+                <div class="customer-field">
+                    <label>Referanse</label>
+                    <input type="text" id="customer-ref" placeholder="Tilbudsnummer / ref.">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Drawing Section (shown when coming from tegneprogram) ===== -->
+    <section class="drawing-section hidden" id="drawing-section">
+        <div class="drawing-card">
+            <div class="drawing-layout">
+                <div class="drawing-preview">
+                    <h3>🖼️ Tegning</h3>
+                    <img id="drawing-image" alt="Tegning fra ParkTegn" />
+                </div>
+                <div class="drawing-items">
+                    <h3>📐 Elementer fra tegning</h3>
+                    <p class="drawing-hint">Velg riktig produkt fra prislisten for hvert element. Antall er hentet fra tegningen.</p>
+                    <div id="drawing-items-list"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <!-- ===== Email Attachments (shown when creating quote from email) ===== -->
+    <section class="email-images-section hidden" id="email-images-section">
+        <div class="email-images-card">
+            <div class="email-images-header">
+                <h3>📎 Vedlegg fra forespørsel</h3>
+                <button class="email-images-clear" id="email-images-clear" title="Fjern bilder">✕ Fjern</button>
+            </div>
+            <div class="email-images-grid" id="email-images-grid"></div>
+        </div>
+    </section>
+    <!-- ===== Email Quote Disclaimer (shown when quote is from email) ===== -->
+    <section class="email-disclaimer-section hidden" id="email-disclaimer-section">
+        <div class="email-disclaimer-card">
+            <div class="email-disclaimer-header">
+                <p class="email-disclaimer-text">
+                    ℹ️ Dette tilbudet er basert på en maskinell behandling av mottatt forespørsel per e-post. 
+                    Dersom det er åpenbare mangler eller feil, ber vi om at dette meldes tilbake slik at tilbudet kan korrigeres.
+                </p>
+                <button class="btn-toggle-email" id="ai-swap-material-btn" style="display:none; background:rgba(234, 179, 8, 0.2); border-color:rgba(234, 179, 8, 0.5);">🔄 Bytt Maling/Termoplast</button>
+                <button class="btn-toggle-email" id="toggle-email-btn">👀 Vis opprinnelig forespørsel</button>
+            </div>
+            <div class="email-original-content hidden" id="email-original-content">
+                <pre id="email-original-text"></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Category Selector ===== -->
+    <section class="category-selector-section">
+        <div class="category-selector-card">
+            <div class="category-selector-left">
+                <div class="category-selector-icon">🎯</div>
+                <div class="category-selector-body">
+                    <label for="category-select" class="category-selector-label">Velg tjeneste</label>
+                    <select id="category-select" class="category-dropdown">
+                        <option value="Alle">Alle kategorier</option>
+                        <option value="Demarkering">🔴 Demarkering</option>
+                        <option value="Maling">🎨 Maling</option>
+                        <option value="Termoplast">🔥 Termoplast</option>
+                        <option value="Prefabrikert">📐 Prefabrikert</option>
+                        <option value="Kaldplast">❄️ Kaldplast</option>
+                        <option value="Tillegg">➕ Tillegg og kjøring</option>
+                    </select>
+                </div>
+            </div>
+            <div class="category-pills" id="category-pills">
+                <button class="cat-pill active" data-cat="Alle">Alle</button>
+                <button class="cat-pill" data-cat="Demarkering">Demarkering</button>
+                <button class="cat-pill" data-cat="Maling">Maling</button>
+                <button class="cat-pill" data-cat="Termoplast">Termoplast</button>
+                <button class="cat-pill" data-cat="Prefabrikert">Prefabrikert</button>
+                <button class="cat-pill" data-cat="Kaldplast">Kaldplast</button>
+                <button class="cat-pill" data-cat="Tillegg">Tillegg</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Controls Bar ===== -->
+    <section class="controls-bar">
+        <div class="control-card accent-card">
+            <div class="control-icon purple">%</div>
+            <div class="control-body">
+                <div class="label">Rabatt</div>
+                <div class="discount-input-wrapper">
+                    <input type="number" id="discount-input" value="0" min="0" max="100" step="1">
+                    <span class="pct-label">%</span>
+                </div>
+            </div>
+        </div>
+        <div class="control-card">
+            <div class="control-icon blue">📦</div>
+            <div class="control-body">
+                <div class="label">Valgte produkter</div>
+                <div class="value" id="stat-count">0</div>
+            </div>
+        </div>
+        <div class="control-card">
+            <div class="control-icon orange">💰</div>
+            <div class="control-body">
+                <div class="label">Sum før rabatt</div>
+                <div class="value" id="stat-before">kr 0,-</div>
+            </div>
+        </div>
+        <div class="control-card success-card">
+            <div class="control-icon green">✂️</div>
+            <div class="control-body">
+                <div class="label">Rabatt beløp</div>
+                <div class="value" id="stat-discount-val">—</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Product List ===== -->
+    <section class="product-section">
+        <div class="product-section-header">
+            <h2>Produkter <span class="product-count-badge">0 valgt</span></h2>
+            <div class="product-actions">
+                <button class="btn-outline" id="select-all-btn">Velg alle</button>
+                <button class="btn-outline" id="deselect-all-btn">Fjern alle</button>
+            </div>
+        </div>
+
+        <!-- Column headers -->
+        <div class="product-list-header">
+            <span></span>
+            <span>Produkt</span>
+            <span>Antall</span>
+            <span style="text-align:right;">Enhetspris</span>
+            <span style="text-align:right;">Med rabatt</span>
+            <span style="text-align:right;">Totalt</span>
+        </div>
+
+        <!-- Product rows rendered by JS -->
+        <div class="product-list" id="product-list"></div>
+    </section>
+
+    <!-- ===== Print-only Summary ===== -->
+    <div class="print-summary">
+        <table>
+            <tbody id="print-summary-body"></tbody>
+        </table>
+    </div>
+
+    <!-- ===== Sticky Summary Footer ===== -->
+    <footer class="summary-footer">
+        <div class="summary-left">
+            <div class="summary-item">
+                <span class="label">Sum eks. MVA</span>
+                <span class="value muted" id="footer-before">kr 0,-</span>
+            </div>
+            <div class="summary-item" style="display:none;">
+                <span class="label">Rabatt</span>
+                <span class="value" id="footer-discount" style="color:var(--danger);">—</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">Totalt eks. MVA</span>
+                <span class="value total" id="footer-total">kr 0,-</span>
+            </div>
+            <div class="summary-item">
+                <span class="label">MVA (25%)</span>
+                <span class="value mva" id="footer-mva">inkl. MVA: kr 0,-</span>
+            </div>
+        </div>
+        <div class="summary-actions">
+            <button class="btn-send-email hidden" id="send-email-btn">
+                📧 Send tilbud
+            </button>
+            <button class="btn-primary btn-print" id="print-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M6 9V2h12v7" />
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" />
+                </svg>
+                Skriv ut tilbud
+            </button>
+        </div>
+    </footer>
+
+    <!-- ===== Company Footer ===== -->
+    <section class="company-footer">
+        <div class="company-footer-inner">
+            <div class="company-footer-logo">
+                <img src="src/logo-christiania.png" alt="Christiania Oppmerking AS">
+            </div>
+            <div class="company-footer-info">
+                <div class="company-footer-col">
+                    <h4>Christiania Oppmerking AS</h4>
+                </div>
+                <div class="company-footer-col">
+                    <span class="footer-label">Telefon</span>
+                    <a href="tel:+4740004254">+47 40 00 42 54</a>
+                    <span class="footer-label">E-post</span>
+                    <a href="mailto:post@christianiaoppmerking.no">post@christianiaoppmerking.no</a>
+                </div>
+                <div class="company-footer-col">
+                    <span class="footer-label">Adresse</span>
+                    <span>Trollåsveien 4</span>
+                    <span>1414 Trollåsen</span>
+                </div>
+                <div class="company-footer-col">
+                    <span class="footer-label">Web</span>
+                    <a href="https://christianiaoppmerking.no" target="_blank">christianiaoppmerking.no</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Print Footer (shown at bottom of printed quote) ===== -->
+    <div class="print-company-footer">
+        <div class="print-footer-line"></div>
+        <div class="print-footer-content">
+            <div class="print-footer-details">
+                <strong>Christiania Oppmerking AS</strong> &nbsp;|&nbsp;
+                Tlf: +47 40 00 42 54 &nbsp;|&nbsp;
+                post@christianiaoppmerking.no &nbsp;|&nbsp;
+                Trollåsveien 4, 1414 Trollåsen &nbsp;|&nbsp;
+                christianiaoppmerking.no
+            </div>
+        </div>
+    </div>
+
+    <script src="src/tilbud.js"></script>
+</body>
+
+</html>

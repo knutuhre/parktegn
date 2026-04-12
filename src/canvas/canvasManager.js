@@ -90,9 +90,82 @@ export class CanvasManager {
         this.canvas.addEventListener('mouseup', (e) => this._onMouseUp(e));
         this.canvas.addEventListener('mouseleave', (e) => this._onMouseUp(e));
         this.canvas.addEventListener('wheel', (e) => this._onWheel(e));
+        this.canvas.addEventListener('dblclick', (e) => this._onDoubleClick(e));
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this._onKeyDown(e));
+    }
+
+    /**
+     * Double-click handler: split a parking row by removing the clicked spot.
+     */
+    _onDoubleClick(e) {
+        if (this.currentTool !== 'select') return;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+        const world = this.screenToWorld(screenX, screenY);
+
+        // Find clicked parking element
+        const hit = this._hitTest(world);
+        if (!hit || hit.type !== 'parking' || (hit.spotCount || 1) < 2) return;
+
+        // Don't split curved rows (too complex for now)
+        if (hit.curveControlPoints && hit.curveControlPoints.length > 0) return;
+
+        const el = hit;
+        const ppm = this.pixelsPerMeter || 20;
+        const count = el.spotCount || 1;
+        const twoFiveM = ppm * 2.5;
+        const skewAngle = Math.atan2(el.skewOffset || 0, el.height);
+        const cosA = Math.cos(skewAngle);
+        const baseSpacing = twoFiveM / cosA;
+
+        // Un-rotate the click point to local coordinates
+        const rot = el.rotation || 0;
+        const pivotX = el.pivotX != null ? el.pivotX : el.x + el.width / 2;
+        const pivotY = el.pivotY != null ? el.pivotY : el.y + el.height / 2;
+        const local = this._rotatePoint(world.x, world.y, pivotX, pivotY, -rot);
+
+        // Determine which spot index was clicked
+        const spotIdx = Math.floor((local.x - el.x) / baseSpacing);
+        if (spotIdx < 0 || spotIdx >= count) return;
+
+        // Remove the original element
+        this.removeElement(el);
+
+        // Create left row (spots before the removed one)
+        if (spotIdx > 0) {
+            const leftRow = {
+                ...JSON.parse(JSON.stringify(el)),
+                id: Date.now() + Math.random(),
+                spotCount: spotIdx,
+                width: spotIdx * baseSpacing
+            };
+            this.elements.push(leftRow);
+        }
+
+        // Create right row (spots after the removed one)
+        if (spotIdx < count - 1) {
+            const rightCount = count - spotIdx - 1;
+            // Offset position along the row direction
+            const offsetX = (spotIdx + 1) * baseSpacing;
+            const rightRow = {
+                ...JSON.parse(JSON.stringify(el)),
+                id: Date.now() + Math.random() + 0.1,
+                spotCount: rightCount,
+                width: rightCount * baseSpacing,
+                x: el.x + offsetX,
+                pivotX: el.x + offsetX
+            };
+            this.elements.push(rightRow);
+        }
+
+        this.selectedElement = null;
+        if (this.onSelectionChange) this.onSelectionChange(null);
+        this._saveHistory();
+        this.render();
     }
 
     /**
@@ -302,6 +375,78 @@ export class CanvasManager {
                     this.render();
                 }
                 break;
+            case 'c':
+                // Cycle curve mode: straight → arc (1 CP) → S-shape (2 CPs) → straight
+                if (this.selectedElement && this.selectedElement.type === 'parking') {
+                    const el = this.selectedElement;
+                    const ppm = this.pixelsPerMeter || 20;
+                    const count = el.spotCount || 1;
+                    const twoFiveM = ppm * 2.5;
+                    const skewAngle = Math.atan2(el.skewOffset || 0, el.height);
+                    const cosA = Math.cos(skewAngle);
+                    const baseSpacing = twoFiveM / cosA;
+                    const side = el.skewSide || 'top';
+                    const baseY = side === 'top' ? el.y + el.height : el.y;
+                    const perpOffset = ppm * 3 * (side === 'top' ? 1 : -1);
+
+                    if (!el.curveControlPoints || el.curveControlPoints.length === 0) {
+                        // Straight → Arc (1 control point)
+                        const midX = el.x + (count / 2) * baseSpacing;
+                        el.curveControlPoints = [{
+                            x: midX,
+                            y: baseY - perpOffset
+                        }];
+                    } else if (el.curveControlPoints.length === 1) {
+                        // Arc → S-shape (2 control points)
+                        const thirdX = el.x + (count / 3) * baseSpacing;
+                        const twoThirdX = el.x + (2 * count / 3) * baseSpacing;
+                        el.curveControlPoints = [
+                            { x: thirdX, y: baseY - perpOffset },
+                            { x: twoThirdX, y: baseY + perpOffset }
+                        ];
+                    } else {
+                        // S-shape → Straight (remove all)
+                        delete el.curveControlPoints;
+                    }
+                    this._saveHistory();
+                    this.render();
+                }
+                break;
+            case '+':
+            case '=':
+            case 'arrowup':
+                e.preventDefault();
+                if (this.selectedElement && this.selectedElement.type === 'parking') {
+                    const el = this.selectedElement;
+                    const ppm = this.pixelsPerMeter || 20;
+                    el.spotCount = (el.spotCount || 1) + 1;
+                    const twoFiveM = ppm * 2.5;
+                    const skewAngle = Math.atan2(el.skewOffset || 0, el.height);
+                    const baseSpacing = twoFiveM / Math.cos(skewAngle);
+                    el.width = el.spotCount * baseSpacing;
+                    this._saveHistory();
+                    this.render();
+                } else if (this.selectedElement && this.selectedElement.type === 'crosswalk') {
+                    this._adjustCrosswalkStripes(this.selectedElement, 1);
+                }
+                break;
+            case '-':
+            case 'arrowdown':
+                e.preventDefault();
+                if (this.selectedElement && this.selectedElement.type === 'parking' && (this.selectedElement.spotCount || 1) > 1) {
+                    const el = this.selectedElement;
+                    const ppm = this.pixelsPerMeter || 20;
+                    el.spotCount = (el.spotCount || 1) - 1;
+                    const twoFiveM = ppm * 2.5;
+                    const skewAngle = Math.atan2(el.skewOffset || 0, el.height);
+                    const baseSpacing = twoFiveM / Math.cos(skewAngle);
+                    el.width = el.spotCount * baseSpacing;
+                    this._saveHistory();
+                    this.render();
+                } else if (this.selectedElement && this.selectedElement.type === 'crosswalk') {
+                    this._adjustCrosswalkStripes(this.selectedElement, -1);
+                }
+                break;
             case 'escape':
                 this.previewElement = null;
                 this.toolState = {};
@@ -324,6 +469,18 @@ export class CanvasManager {
 
     // --- Select Tool ---
     _handleSelectDown(world, screen, event) {
+        // Check curve control point handles FIRST (parking only)
+        if (this.selectedElement && this.selectedElement.type === 'parking' && this.selectedElement.curveControlPoints) {
+            const cpIdx = this._isCurveHandle(screen, this.selectedElement);
+            if (cpIdx >= 0) {
+                this.isDragging = true;
+                this.toolState.curveDragging = true;
+                this.toolState.curvePointIndex = cpIdx;
+                this.render();
+                return;
+            }
+        }
+
         // Check skew handle FIRST (parking only) — before rotation and hit-test
         if (this.selectedElement && this.selectedElement.type === 'parking') {
             if (this._isSkewHandle(screen, this.selectedElement)) {
@@ -391,7 +548,16 @@ export class CanvasManager {
 
     _handleSelectMove(world, event) {
         if (this.isDragging && this.selectedElement) {
-            if (this.toolState.rotating) {
+            if (this.toolState.curveDragging) {
+                // Move curve control point in world coordinates
+                const el = this.selectedElement;
+                const rot = el.rotation || 0;
+                const pivotX = el.pivotX != null ? el.pivotX : el.x + el.width / 2;
+                const pivotY = el.pivotY != null ? el.pivotY : el.y + el.height / 2;
+                // Un-rotate the world point to get local coordinates
+                const local = this._rotatePoint(world.x, world.y, pivotX, pivotY, -rot);
+                el.curveControlPoints[this.toolState.curvePointIndex] = { x: local.x, y: local.y };
+            } else if (this.toolState.rotating) {
                 const cx = this.selectedElement.x + this.selectedElement.width / 2;
                 const cy = this.selectedElement.y + this.selectedElement.height / 2;
                 const angle = Math.atan2(world.y - cy, world.x - cx);
@@ -449,6 +615,7 @@ export class CanvasManager {
         this.isDragging = false;
         this.toolState.rotating = false;
         this.toolState.skewing = false;
+        this.toolState.curveDragging = false;
     }
 
     // --- Parking Spot Tool ---
@@ -983,6 +1150,8 @@ export class CanvasManager {
 
     _isSkewHandle(screenPoint, el) {
         if (el.type !== 'parking') return false;
+        // Skip skew handle for curved rows (use curve handles instead)
+        if (el.curveControlPoints && el.curveControlPoints.length > 0) return false;
         const geo = this._getParkingGeometry(el);
         const rot = el.rotation || 0;
         const pivotX = el.pivotX != null ? el.pivotX : el.x + el.width / 2;
@@ -994,6 +1163,25 @@ export class CanvasManager {
         return dist < 25;
     }
 
+    /**
+     * Check if a screen point hits a curve control point handle.
+     * Returns the index of the hit control point, or -1.
+     */
+    _isCurveHandle(screenPoint, el) {
+        if (!el.curveControlPoints) return -1;
+        const rot = el.rotation || 0;
+        const pivotX = el.pivotX != null ? el.pivotX : el.x + el.width / 2;
+        const pivotY = el.pivotY != null ? el.pivotY : el.y + el.height / 2;
+        for (let i = 0; i < el.curveControlPoints.length; i++) {
+            const cp = el.curveControlPoints[i];
+            const cpWorld = this._rotatePoint(cp.x, cp.y, pivotX, pivotY, rot);
+            const cpScreen = this.worldToScreen(cpWorld.x, cpWorld.y);
+            const dist = Math.sqrt(Math.pow(screenPoint.x - cpScreen.x, 2) + Math.pow(screenPoint.y - cpScreen.y, 2));
+            if (dist < 20) return i;
+        }
+        return -1;
+    }
+
     // Compute parking geometry (matches perpendicular-edge rectangle renderer)
     _getParkingGeometry(el) {
         const ppm = this.pixelsPerMeter || 20;
@@ -1001,10 +1189,77 @@ export class CanvasManager {
         const skew = el.skewOffset || 0;
         const side = el.skewSide || 'top';
         const h = el.height;
-
-        const skewAngle = Math.atan2(skew, h);
         const fiveM = ppm * 5;
         const twoFiveM = ppm * 2.5;
+
+        // Curved row geometry (1 CP = arc, 2 CPs = S-shape)
+        if (el.curveControlPoints && el.curveControlPoints.length > 0) {
+            const skewAngle = Math.atan2(skew, h);
+            const cosA = Math.cos(skewAngle);
+            const baseSpacing = twoFiveM / cosA;
+            const sideSign = side === 'top' ? 1 : -1;
+
+            // Start and end points of the base edge
+            const baseY = side === 'top' ? el.y + h : el.y;
+            const p0 = { x: el.x, y: baseY };
+            const pEnd = { x: el.x + count * baseSpacing, y: baseY };
+            const cps = el.curveControlPoints;
+
+            // Sample all spot corners along the curve
+            const totalLen = this._curveLength(p0, cps, pEnd);
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+            for (let i = 0; i < count; i++) {
+                const centerLen = (i + 0.5) * (totalLen / count);
+                const t = this._curveTForLength(p0, cps, pEnd, centerLen);
+                const pt = this._curvePoint(p0, cps, pEnd, t);
+                const tan = this._curveTangent(p0, cps, pEnd, t);
+                const tanLen = Math.sqrt(tan.x * tan.x + tan.y * tan.y) || 1;
+                const tx = tan.x / tanLen;
+                const ty = tan.y / tanLen;
+                const nx = -ty * sideSign;
+                const ny = tx * sideSign;
+
+                const halfW = twoFiveM / 2;
+                const pts = [
+                    { x: pt.x - tx * halfW, y: pt.y - ty * halfW },
+                    { x: pt.x + tx * halfW, y: pt.y + ty * halfW },
+                    { x: pt.x + tx * halfW + nx * fiveM, y: pt.y + ty * halfW + ny * fiveM },
+                    { x: pt.x - tx * halfW + nx * fiveM, y: pt.y - ty * halfW + ny * fiveM }
+                ];
+                for (const p of pts) {
+                    minX = Math.min(minX, p.x);
+                    minY = Math.min(minY, p.y);
+                    maxX = Math.max(maxX, p.x);
+                    maxY = Math.max(maxY, p.y);
+                }
+            }
+
+            // Tip midpoint
+            const midPt = this._curvePoint(p0, cps, pEnd, 0.5);
+            const midTan = this._curveTangent(p0, cps, pEnd, 0.5);
+            const midTanLen = Math.sqrt(midTan.x * midTan.x + midTan.y * midTan.y) || 1;
+            const mnx = (-midTan.y / midTanLen) * sideSign;
+            const mny = (midTan.x / midTanLen) * sideSign;
+            const tipMidX = midPt.x + mnx * fiveM;
+            const tipMidY = midPt.y + mny * fiveM;
+
+            return {
+                baseY, skewAngle, count, baseSpacing: totalLen / count,
+                divDx: 0, divDy: 0,
+                tipMidX, tipMidY,
+                curved: true,
+                corners: [
+                    { x: minX, y: maxY },
+                    { x: maxX, y: maxY },
+                    { x: maxX, y: minY },
+                    { x: minX, y: minY }
+                ]
+            };
+        }
+
+        // Straight row geometry (original)
+        const skewAngle = Math.atan2(skew, h);
         const cosA = Math.cos(skewAngle);
         const sinA = Math.sin(skewAngle);
         const baseY = side === 'top' ? el.y + h : el.y;
@@ -1060,6 +1315,150 @@ export class CanvasManager {
             x: cx + (px - cx) * cos - (py - cy) * sin,
             y: cy + (px - cx) * sin + (py - cy) * cos
         };
+    }
+
+    // ===== Bézier Curve Helpers =====
+
+    // --- Quadratic (1 control point) ---
+
+    _bezierQuadPoint(p0, p1, p2, t) {
+        const mt = 1 - t;
+        return {
+            x: mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
+            y: mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y
+        };
+    }
+
+    _bezierQuadTangent(p0, p1, p2, t) {
+        const mt = 1 - t;
+        return {
+            x: 2 * mt * (p1.x - p0.x) + 2 * t * (p2.x - p1.x),
+            y: 2 * mt * (p1.y - p0.y) + 2 * t * (p2.y - p1.y)
+        };
+    }
+
+    // --- Cubic (2 control points) ---
+
+    _bezierCubicPoint(p0, p1, p2, p3, t) {
+        const mt = 1 - t;
+        const mt2 = mt * mt;
+        const t2 = t * t;
+        return {
+            x: mt2 * mt * p0.x + 3 * mt2 * t * p1.x + 3 * mt * t2 * p2.x + t2 * t * p3.x,
+            y: mt2 * mt * p0.y + 3 * mt2 * t * p1.y + 3 * mt * t2 * p2.y + t2 * t * p3.y
+        };
+    }
+
+    _bezierCubicTangent(p0, p1, p2, p3, t) {
+        const mt = 1 - t;
+        return {
+            x: 3 * mt * mt * (p1.x - p0.x) + 6 * mt * t * (p2.x - p1.x) + 3 * t * t * (p3.x - p2.x),
+            y: 3 * mt * mt * (p1.y - p0.y) + 6 * mt * t * (p2.y - p1.y) + 3 * t * t * (p3.y - p2.y)
+        };
+    }
+
+    // --- Generic dispatchers (work with 1 or 2 control points) ---
+
+    /**
+     * Evaluate curve at parameter t.
+     * @param {Object} p0 - start point
+     * @param {Array} cps - array of 1 or 2 control points
+     * @param {Object} pEnd - end point
+     */
+    _curvePoint(p0, cps, pEnd, t) {
+        if (cps.length === 1) return this._bezierQuadPoint(p0, cps[0], pEnd, t);
+        return this._bezierCubicPoint(p0, cps[0], cps[1], pEnd, t);
+    }
+
+    _curveTangent(p0, cps, pEnd, t) {
+        if (cps.length === 1) return this._bezierQuadTangent(p0, cps[0], pEnd, t);
+        return this._bezierCubicTangent(p0, cps[0], cps[1], pEnd, t);
+    }
+
+    _curveLength(p0, cps, pEnd, segments = 50) {
+        let length = 0;
+        let prev = p0;
+        for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            const pt = this._curvePoint(p0, cps, pEnd, t);
+            const dx = pt.x - prev.x;
+            const dy = pt.y - prev.y;
+            length += Math.sqrt(dx * dx + dy * dy);
+            prev = pt;
+        }
+        return length;
+    }
+
+    _curveTForLength(p0, cps, pEnd, targetLen, segments = 50) {
+        let length = 0;
+        let prev = p0;
+        for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            const pt = this._curvePoint(p0, cps, pEnd, t);
+            const dx = pt.x - prev.x;
+            const dy = pt.y - prev.y;
+            const segLen = Math.sqrt(dx * dx + dy * dy);
+            if (length + segLen >= targetLen) {
+                const frac = (targetLen - length) / segLen;
+                return (i - 1 + frac) / segments;
+            }
+            length += segLen;
+            prev = pt;
+        }
+        return 1;
+    }
+
+    /**
+     * Add or remove stripes from a crosswalk.
+     * @param {Object} el - crosswalk element
+     * @param {number} delta - +1 to add a stripe, -1 to remove
+     */
+    _adjustCrosswalkStripes(el, delta) {
+        const ppm = this.pixelsPerMeter || 20;
+        const stripeWidthM = el.stripeWidth || 0.3;
+        const stripeWidthPx = Math.max(2, ppm * stripeWidthM);
+        const stepPx = stripeWidthPx * 2; // stripe + gap
+
+        if (el.stripeAngle != null) {
+            // Path-based crosswalk: extend/shrink path end
+            const pdx = el.pathEndX - el.pathStartX;
+            const pdy = el.pathEndY - el.pathStartY;
+            const pathLen = Math.sqrt(pdx * pdx + pdy * pdy);
+
+            // Current stripe count
+            const sa = el.stripeAngle;
+            const roadPerpX = -Math.sin(sa);
+            const roadPerpY = Math.cos(sa);
+            const pux = pdx / pathLen;
+            const puy = pdy / pathLen;
+            const perpPerPath = Math.abs(pux * roadPerpX + puy * roadPerpY);
+            const pathStep = perpPerPath > 0.01 ? stepPx / perpPerPath : stepPx;
+            const currentCount = Math.floor(pathLen / pathStep);
+            const newCount = Math.max(1, currentCount + delta);
+
+            // Extend/shrink path end
+            const newPathLen = (newCount + 0.5) * pathStep;
+            const scale = newPathLen / pathLen;
+            el.pathEndX = el.pathStartX + pdx * scale;
+            el.pathEndY = el.pathStartY + pdy * scale;
+
+            // Update bounding box
+            el.width = Math.abs(el.pathEndX - el.pathStartX);
+            el.height = Math.abs(el.pathEndY - el.pathStartY);
+        } else {
+            // Legacy crosswalk: adjust width or height
+            const isHorizontal = Math.abs(el.width) > Math.abs(el.height);
+            if (isHorizontal) {
+                el.width += delta * stepPx;
+                el.width = Math.max(stepPx, el.width);
+            } else {
+                el.height += delta * stepPx;
+                el.height = Math.max(stepPx, el.height);
+            }
+        }
+
+        this._saveHistory();
+        this.render();
     }
 
     // ===== Element Management =====
@@ -1315,15 +1714,105 @@ export class CanvasManager {
         const skew = el.skewOffset || 0;
         const side = el.skewSide || 'top';
         const h = el.height;
-        const spotW = el.width / count; // base spacing per spot
+        const fiveM = ppm * 5;
+        const twoFiveM = ppm * 2.5;
 
         ctx.strokeStyle = el.color;
         ctx.lineWidth = lineWidth;
         ctx.setLineDash([]);
 
+        // ---- Curved row rendering (arc or S-shape) ----
+        if (el.curveControlPoints && el.curveControlPoints.length > 0) {
+            const skewAngle = Math.atan2(skew, h);
+            const cosA = Math.cos(skewAngle);
+            const baseSpacing = twoFiveM / cosA;
+            const sideSign = side === 'top' ? 1 : -1;
+            const baseY = side === 'top' ? el.y + h : el.y;
+
+            // Curve endpoints and control points
+            const p0 = { x: el.x, y: baseY };
+            const pEnd = { x: el.x + count * baseSpacing, y: baseY };
+            const cps = el.curveControlPoints;
+
+            const totalLen = this._curveLength(p0, cps, pEnd);
+            const spotLen = totalLen / count;
+
+            for (let i = 0; i < count; i++) {
+                const centerLen = (i + 0.5) * spotLen;
+                const t = this._curveTForLength(p0, cps, pEnd, centerLen);
+                const pt = this._curvePoint(p0, cps, pEnd, t);
+                const tan = this._curveTangent(p0, cps, pEnd, t);
+                const tanLen = Math.sqrt(tan.x * tan.x + tan.y * tan.y) || 1;
+                const tx = tan.x / tanLen;
+                const ty = tan.y / tanLen;
+                // Normal perpendicular to tangent (toward tip side)
+                const nx = -ty * sideSign;
+                const ny = tx * sideSign;
+
+                const halfW = twoFiveM / 2;
+                // Four corners of the spot
+                const blX = pt.x - tx * halfW;
+                const blY = pt.y - ty * halfW;
+                const brX = pt.x + tx * halfW;
+                const brY = pt.y + ty * halfW;
+                const trX = brX + nx * fiveM;
+                const trY = brY + ny * fiveM;
+                const tlX = blX + nx * fiveM;
+                const tlY = blY + ny * fiveM;
+
+                ctx.beginPath();
+                ctx.moveTo(blX, blY);
+                ctx.lineTo(brX, brY);
+                ctx.lineTo(trX, trY);
+                ctx.lineTo(tlX, tlY);
+                ctx.closePath();
+
+                ctx.fillStyle = el.color + '15';
+                ctx.fill();
+                ctx.stroke();
+
+                // Helper lines for curved spots
+                if (this.showHelperLines) {
+                    const helperExtra = ppm * 6.5;
+                    ctx.save();
+                    ctx.strokeStyle = el.color;
+                    ctx.lineWidth = lineWidth;
+                    ctx.setLineDash([6, 6]);
+                    // Left edge tip
+                    ctx.beginPath();
+                    ctx.moveTo(tlX, tlY);
+                    ctx.lineTo(tlX + nx * helperExtra, tlY + ny * helperExtra);
+                    ctx.stroke();
+                    // Right edge tip
+                    ctx.beginPath();
+                    ctx.moveTo(trX, trY);
+                    ctx.lineTo(trX + nx * helperExtra, trY + ny * helperExtra);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            // Draw the Bézier curve base line (dashed, for visual reference)
+            ctx.save();
+            ctx.strokeStyle = el.color + '60';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            if (cps.length === 1) {
+                ctx.quadraticCurveTo(cps[0].x, cps[0].y, pEnd.x, pEnd.y);
+            } else {
+                ctx.bezierCurveTo(cps[0].x, cps[0].y, cps[1].x, cps[1].y, pEnd.x, pEnd.y);
+            }
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.setLineDash([]);
+            return;
+        }
+
+        // ---- Straight row rendering (original) ----
         const skewAngle = Math.atan2(skew, h);
-        const fiveM = ppm * 5;
-        const twoFiveM = ppm * 2.5;
         const cosA = Math.cos(skewAngle);
         const sinA = Math.sin(skewAngle);
         const baseY = side === 'top' ? el.y + h : el.y;
@@ -1370,7 +1859,6 @@ export class CanvasManager {
         }
 
         // Draw 6.5m helper lines extending from each spot's left and right tip edges
-        // Each helper is a direct extension of the spot's 5m edge → 11.5m total from back
         if (this.showHelperLines) {
             const helperExtra = ppm * 6.5;
             const hux = divDx / fiveM;
@@ -1810,8 +2298,8 @@ export class CanvasManager {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Skew handle for parking (orange diamond at tip midpoint)
-        if (el.type === 'parking') {
+        // Skew handle for parking (orange diamond at tip midpoint) — only for straight rows
+        if (el.type === 'parking' && !(el.curveControlPoints && el.curveControlPoints.length > 0)) {
             const geo = this._getParkingGeometry(el);
             const tipWorld = this._rotatePoint(geo.tipMidX, geo.tipMidY, pivotX, pivotY, rot);
             const tipScreen = this.worldToScreen(tipWorld.x, tipWorld.y);
@@ -1823,6 +2311,86 @@ export class CanvasManager {
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 2;
             ctx.strokeRect(-6, -6, 12, 12);
+            ctx.restore();
+        }
+
+        // Curve control point handles for parking (blue circles)
+        if (el.type === 'parking' && el.curveControlPoints && el.curveControlPoints.length > 0) {
+            for (const cp of el.curveControlPoints) {
+                const cpWorld = this._rotatePoint(cp.x, cp.y, pivotX, pivotY, rot);
+                const cpScreen = this.worldToScreen(cpWorld.x, cpWorld.y);
+
+                // Draw line from start/end to control point
+                const ppm = this.pixelsPerMeter || 20;
+                const twoFiveM = ppm * 2.5;
+                const count = el.spotCount || 1;
+                const skewAngle = Math.atan2(el.skewOffset || 0, el.height);
+                const baseSpacing = twoFiveM / Math.cos(skewAngle);
+                const side = el.skewSide || 'top';
+                const baseY = side === 'top' ? el.y + el.height : el.y;
+                const p0World = this._rotatePoint(el.x, baseY, pivotX, pivotY, rot);
+                const p2World = this._rotatePoint(el.x + count * baseSpacing, baseY, pivotX, pivotY, rot);
+                const p0Screen = this.worldToScreen(p0World.x, p0World.y);
+                const p2Screen = this.worldToScreen(p2World.x, p2World.y);
+
+                ctx.save();
+                ctx.strokeStyle = '#3b82f680';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(p0Screen.x, p0Screen.y);
+                ctx.lineTo(cpScreen.x, cpScreen.y);
+                ctx.lineTo(p2Screen.x, p2Screen.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+
+                // Draw handle
+                ctx.beginPath();
+                ctx.arc(cpScreen.x, cpScreen.y, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#3b82f6';
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Spot count badge
+            const geo = this._getParkingGeometry(el);
+            const tipWorld = this._rotatePoint(geo.tipMidX, geo.tipMidY, pivotX, pivotY, rot);
+            const tipScreen = this.worldToScreen(tipWorld.x, tipWorld.y);
+            ctx.save();
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const badgeText = `×${el.spotCount || 1}`;
+            const textWidth = ctx.measureText(badgeText).width;
+            ctx.fillStyle = 'rgba(99,102,241,0.9)';
+            ctx.beginPath();
+            ctx.roundRect(tipScreen.x - textWidth / 2 - 6, tipScreen.y - 10, textWidth + 12, 20, 4);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.fillText(badgeText, tipScreen.x, tipScreen.y);
+            ctx.restore();
+        }
+
+        // Spot count badge for straight parking rows too
+        if (el.type === 'parking' && !(el.curveControlPoints && el.curveControlPoints.length > 0)) {
+            const geo = this._getParkingGeometry(el);
+            const tipWorld = this._rotatePoint(geo.tipMidX, geo.tipMidY, pivotX, pivotY, rot);
+            const tipScreen = this.worldToScreen(tipWorld.x, tipWorld.y);
+            ctx.save();
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const badgeText = `×${el.spotCount || 1}`;
+            const textWidth = ctx.measureText(badgeText).width;
+            ctx.fillStyle = 'rgba(99,102,241,0.9)';
+            ctx.beginPath();
+            ctx.roundRect(tipScreen.x - textWidth / 2 - 6, tipScreen.y - 26, textWidth + 12, 20, 4);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.fillText(badgeText, tipScreen.x, tipScreen.y - 16);
             ctx.restore();
         }
     }
