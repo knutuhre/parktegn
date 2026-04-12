@@ -1574,26 +1574,45 @@ function parseEmailTextToProducts(text) {
         defaultMaterial = choice ? 'termoplast' : 'maling';
     }
 
-    // 2. Extract quantities
-    const plassRegex = /(\d+)\s*(?:p-plass|plass|parkering|stk(?!\s*hc|sykkel|symbol))/gi;
-    let plassCount = 0;
-    let match;
-    while ((match = plassRegex.exec(text)) !== null) {
-        plassCount += parseInt(match[1]);
+    // 2. Extract quantities — search both "N keyword" and "keyword N" patterns
+    function extractCount(text, keywords) {
+        let total = 0;
+        for (const kw of keywords) {
+            // Pattern 1: number BEFORE keyword — "2 elbilsymbol", "14 p-plasser"
+            const re1 = new RegExp('(\\d+)\\s*(?:stk\\.?\\s*)?(?:' + kw + ')', 'gi');
+            let m;
+            while ((m = re1.exec(text)) !== null) total += parseInt(m[1]);
+            
+            // Pattern 2: keyword THEN number — "elbilsymbol 2", "elbil: 2 stk", "elbil x2"
+            const re2 = new RegExp('(?:' + kw + ')(?:er|ler|er)?\\s*[:=x]?\\s*(\\d+)', 'gi');
+            while ((m = re2.exec(text)) !== null) total += parseInt(m[1]);
+        }
+        return total;
     }
 
-    const hcRegex = /(\d+)\s*(?:hc|handicap|rullestol)(?:\s*(?:plass|symbol|skilt))?/gi;
-    let hcCount = 0;
-    while ((match = hcRegex.exec(text)) !== null) {
-        hcCount += parseInt(match[1]);
+    let plassCount = extractCount(text, ['p-plass', 'parkeringsplass', 'parkering']);
+    // Also catch standalone "N plass" but not "hc-plass"
+    const plassRe = /(\d+)\s*plass/gi;
+    let match;
+    while ((match = plassRe.exec(text)) !== null) {
+        if (!/hc|handicap|elbil|sykkel|mc/i.test(text.substring(Math.max(0, match.index - 15), match.index))) {
+            plassCount += parseInt(match[1]);
+        }
     }
+
+    let hcCount = extractCount(text, ['hc[- ]?plass', 'hc[- ]?symbol', 'handicap', 'rullestol']);
+    // Also just "N hc" if not followed by other words
+    const hcSimple = /(\d+)\s*hc(?!\w)/gi;
+    while ((match = hcSimple.exec(text)) !== null) hcCount += parseInt(match[1]);
+    const hcReverse = /hc\s*[:=x]?\s*(\d+)/gi;
+    while ((match = hcReverse.exec(text)) !== null) hcCount += parseInt(match[1]);
 
     // Separate regex for elbil/sykkel/MC symbols (maps to "symboler, HC/elbil/MC/sykkel")
-    const symbolRegex = /(\d+)\s*(?:elbil|el-bil|sykkel|mc|motorsykkel)(?:\s*(?:symbol|skilt))?/gi;
-    let symbolCount = 0;
-    while ((match = symbolRegex.exec(text)) !== null) {
-        symbolCount += parseInt(match[1]);
-    }
+    let symbolCount = extractCount(text, [
+        'elbil(?:symbol)?', 'el-bil(?:symbol)?',
+        'sykkel(?:symbol)?', 'mc[- ]?symbol',
+        'motorsykkel(?:symbol)?', 'ladesymbol', 'ladeskilt'
+    ]);
 
     const riggCount = 1;
 
