@@ -776,17 +776,58 @@ function applyCustomPricesToProducts(excelList) {
     return matchCount;
 }
 
+// ===== Hardcoded Customer Price Maps (from Unimicro exports) =====
+// Kundepris 2026 (+3.5% KPI) from "prisliste 2026.xltx"
+const CUSTOMER_PRICES = {
+    'aimo': {
+        label: 'Aimo Park',
+        prices: {
+            4202: 13, 4203: 17, 4204: 106, 4205: 131, 4206: 14, 4207: 19,
+            4208: 459, 4209: 630, 4210: 715, 4211: 149, 4213: 1956,
+            3291: 5992, 3202: 43, 3204: 1018, 3205: 1096, 3206: 1451, 3207: 154,
+            3303: 1491, 3304: 1630, 3306: 1342,
+            2501: 121, 8804: 1663, 4216: 22, 4217: 255, 8811: 76
+        }
+    },
+    'aimo park': {
+        label: 'Aimo Park',
+        prices: {
+            4202: 13, 4203: 17, 4204: 106, 4205: 131, 4206: 14, 4207: 19,
+            4208: 459, 4209: 630, 4210: 715, 4211: 149, 4213: 1956,
+            3291: 5992, 3202: 43, 3204: 1018, 3205: 1096, 3206: 1451, 3207: 154,
+            3303: 1491, 3304: 1630, 3306: 1342,
+            2501: 121, 8804: 1663, 4216: 22, 4217: 255, 8811: 76
+        }
+    }
+};
+
 function handleCustomerNameChange(name) {
     const cleanName = name.trim().toLowerCase();
-    const stored = localStorage.getItem('tilbud_custom_prices_' + cleanName);
-    
     const priceSourceLabel = $('#price-source-label');
 
+    // 1. Check hardcoded customer prices first
+    const builtIn = CUSTOMER_PRICES[cleanName];
+    if (builtIn) {
+        for (const p of PRODUCTS) {
+            if (builtIn.prices[p.id] !== undefined) {
+                p.price = builtIn.prices[p.id];
+            }
+        }
+        renderProducts();
+        updateSummary();
+        if (priceSourceLabel) {
+            priceSourceLabel.textContent = `Priser: ${builtIn.label}`;
+            priceSourceLabel.style.color = '#059669';
+        }
+        return;
+    }
+
+    // 2. Check localStorage for uploaded Excel prices
+    const stored = localStorage.getItem('tilbud_custom_prices_' + cleanName);
     if (stored) {
         try {
             const excelList = JSON.parse(stored);
             applyCustomPricesToProducts(excelList);
-            // Re-render
             renderProducts();
             updateSummary();
             if (priceSourceLabel) {
@@ -796,26 +837,27 @@ function handleCustomerNameChange(name) {
         } catch(e) {
             console.error('Kunne ikke laste lagrede kundepriser', e);
         }
-    } else {
-        // Reset to standard prices
-        let changed = false;
-        for (const p of PRODUCTS) {
-            const raw = PRODUCTS_RAW.find(r => r.id === p.id);
-            if (raw) {
-                const stdPrice = Math.round(raw.price * ADJUSTMENT_FACTOR);
-                if (p.price !== stdPrice) {
-                    p.price = stdPrice;
-                    changed = true;
-                }
+        return;
+    }
+
+    // 3. Reset to standard prices
+    let changed = false;
+    for (const p of PRODUCTS) {
+        const raw = PRODUCTS_RAW.find(r => r.id === p.id);
+        if (raw) {
+            const stdPrice = Math.round(raw.price * ADJUSTMENT_FACTOR);
+            if (p.price !== stdPrice) {
+                p.price = stdPrice;
+                changed = true;
             }
         }
-        if (changed) {
-            renderProducts();
-            updateSummary();
-            if (priceSourceLabel) {
-                priceSourceLabel.textContent = 'Standard Priser';
-                priceSourceLabel.style.color = '#475569';
-            }
+    }
+    if (changed) {
+        renderProducts();
+        updateSummary();
+        if (priceSourceLabel) {
+            priceSourceLabel.textContent = 'Standard Priser';
+            priceSourceLabel.style.color = '#475569';
         }
     }
 }
