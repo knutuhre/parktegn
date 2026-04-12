@@ -1464,13 +1464,14 @@ function createQuoteFromEmail(mail) {
     const nameInput = $('#customer-name');
     const projectInput = $('#customer-project');
 
-    // Detect known customers from sender name/email/subject
+    // Detect known customers from sender name/email domain/subject
     const senderLower = ((mail.from_name || '') + ' ' + (mail.from_email || '') + ' ' + (mail.subject || '')).toLowerCase();
+    const emailDomain = ((mail.from_email || '').split('@')[1] || '').toLowerCase();
     let detectedCustomer = '';
     
-    if (senderLower.includes('aimo')) {
+    if (senderLower.includes('aimo') || emailDomain.includes('aimo')) {
         detectedCustomer = 'Aimo Park';
-    } else if (senderLower.includes('park nordic') || senderLower.includes('parknordic')) {
+    } else if (senderLower.includes('park nordic') || senderLower.includes('parknordic') || emailDomain.includes('parknordic')) {
         detectedCustomer = 'Park Nordic';
     }
 
