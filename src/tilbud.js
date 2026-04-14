@@ -1074,6 +1074,7 @@ function setupEmailPanel() {
     const daysInput = $('#email-days-input');
     const addInput = $('#email-add-input');
     const addBtn = $('#email-add-btn');
+    const refreshBtn = $('#btn-fetch-emails');
 
     if (daysInput) {
         daysInput.value = searchDays;
@@ -1118,7 +1119,9 @@ function setupEmailPanel() {
             renderEmailList(cachedEmails);
         }
         if (emailAccounts.length === 0) {
-            fetchEmailAccounts();
+            // We only fetch accounts silently if we don't have them, 
+            // but we don't trigger the login/fetch process automatically.
+            fetchEmailAccounts(); 
         }
     });
 
@@ -1159,10 +1162,12 @@ async function fetchEmailAccounts() {
         emailAccounts = [...data, ...customEmailAccounts];
         renderAccountCheckboxes();
 
-        // Auto-fetch all accounts
+        // Auto-fetch disabled; user must click 'Hent e-poster' manual button
+        /*
         if (emailAccounts.length > 0) {
             fetchFromCheckedAccounts();
         }
+        */
     } catch (e) {
         showEmailError('Kunne ikke koble til serveren. Kjører du server.py?');
     }

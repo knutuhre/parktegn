@@ -103,7 +103,9 @@
                     <div id="email-account-checkboxes" class="email-account-checkboxes" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                         <span style="font-size:12px; color:#94a3b8;">Laster kontoer...</span>
                     </div>
-                    <button class="email-refresh-btn" id="email-refresh-btn" title="Oppdater">🔄</button>
+                    <button class="btn-fetch-emails" id="btn-fetch-emails">
+                        <span>🔍</span> Hent e-poster
+                    </button>
                     <button class="email-close-btn" id="email-close-btn">✕</button>
                 </div>
             </div>
@@ -119,13 +121,14 @@
                 </div>
             </div>
             <div class="email-panel-body" id="email-panel-body">
-                <div class="email-loading" id="email-loading">
+                <div class="email-loading" id="email-loading" style="display:none;">
                     <div class="email-spinner"></div>
                     <p>Henter e-poster fra One.com...</p>
                 </div>
                 <div class="email-list" id="email-list"></div>
                 <div class="email-empty" id="email-empty" style="display:none;">
                     <p>📭 Ingen forespørsler funnet i siste 30 dager</p>
+                    <button class="primary-btn" onclick="fetchFromCheckedAccounts()" style="margin-top:15px;">Søk etter nye e-poster</button>
                 </div>
                 <div class="email-error" id="email-error" style="display:none;">
                     <p id="email-error-msg">Feil ved henting av e-post</p>
