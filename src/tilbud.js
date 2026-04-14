@@ -1229,6 +1229,7 @@ async function fetchFromCheckedAccounts() {
         return;
     }
 
+    const searchBtn = $('#btn-fetch-emails-main');
     const loading = $('#email-loading');
     const list = $('#email-list');
     const empty = $('#email-empty');
@@ -1238,6 +1239,11 @@ async function fetchFromCheckedAccounts() {
     if (list) list.innerHTML = '';
     if (empty) empty.style.display = 'none';
     if (error) error.style.display = 'none';
+    
+    if (searchBtn) {
+        searchBtn.disabled = true;
+        searchBtn.innerHTML = '<span>⏳</span> Søker...';
+    }
 
     // Check if any accounts need passwords
     const needsPwd = [];
@@ -1323,8 +1329,14 @@ async function fetchFromCheckedAccounts() {
 
         renderEmailList(allEmails);
     } catch (e) {
-        if (loading) loading.style.display = 'none';
         showEmailError('Kunne ikke hente e-poster. Sjekk at server.py kjører.');
+    } finally {
+        if (loading) loading.style.display = 'none';
+        const searchBtn = $('#btn-fetch-emails-main');
+        if (searchBtn) {
+            searchBtn.disabled = false;
+            searchBtn.innerHTML = '<span>🔍</span> Søk etter nye forespørsler';
+        }
     }
 }
 
@@ -1359,16 +1371,6 @@ function renderEmailList(emails) {
         return;
     }
     if (empty) empty.style.display = 'none';
-
-    // Add a manual search button at the top of the list for better visibility
-    const refreshHeader = document.createElement('div');
-    refreshHeader.className = 'email-list-refresh-header';
-    refreshHeader.innerHTML = `
-        <button class="primary-btn search-cta-btn" onclick="fetchFromCheckedAccounts()">
-            <span>🔍</span> Søk etter nye forespørsler
-        </button>
-    `;
-    container.appendChild(refreshHeader);
 
     // Group emails by sender address
     const groups = new Map();

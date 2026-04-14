@@ -121,16 +121,24 @@
                 </div>
             </div>
             <div class="email-panel-body" id="email-panel-body">
-                <div class="email-loading" id="email-loading" style="display:none;">
+                <div id="email-search-bar" style="padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--bg-surface);">
+                    <button class="primary-btn" id="btn-fetch-emails-main" onclick="fetchFromCheckedAccounts()" style="width:100%; padding: 10px; display: flex; align-items:center; justify-content:center; gap:8px;">
+                        <span>🔍</span> Søk etter nye forespørsler
+                    </button>
+                </div>
+                
+                <div class="email-loading" id="email-loading" style="display:none; padding: 40px 20px;">
                     <div class="email-spinner"></div>
-                    <p>Henter e-poster fra One.com...</p>
+                    <p>Henter e-poster...</p>
                 </div>
+                
                 <div class="email-list" id="email-list"></div>
-                <div class="email-empty" id="email-empty" style="display:none;">
-                    <p>📭 Ingen forespørsler funnet i siste 30 dager</p>
-                    <button class="primary-btn" onclick="fetchFromCheckedAccounts()" style="margin-top:15px;">Søk etter nye e-poster</button>
+                
+                <div class="email-empty" id="email-empty" style="display:none; padding: 40px 20px; text-align:center;">
+                    <p>📭 Ingen forespørsler funnet i valgt periode</p>
                 </div>
-                <div class="email-error" id="email-error" style="display:none;">
+                
+                <div class="email-error" id="email-error" style="display:none; padding: 20px;">
                     <p id="email-error-msg">Feil ved henting av e-post</p>
                 </div>
             </div>
