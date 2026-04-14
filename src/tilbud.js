@@ -1251,9 +1251,10 @@ async function fetchFromCheckedAccounts() {
             list.innerHTML = `
                 <div style="text-align: center; padding: 30px 20px; background: #fffcfc; border: 1px solid #ffd6d6; border-radius: 8px; margin-top: 10px;">
                     <p style="margin-bottom: 15px; font-weight: 500; color:var(--text-color);">Passord kreves for <b>${accKey}</b></p>
-                    <input type="password" id="temp-pwd-input" placeholder="Passord for e-post..." style="padding: 10px; width: 80%; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 15px;">
+                    <input type="password" id="temp-pwd-input" placeholder="Passord for e-post..." style="padding: 10px; width: 80%; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 15px;" 
+                        onkeydown="if(event.key === 'Enter') document.getElementById('fetch-mail-btn').click()">
                     <br>
-                    <button class="primary-btn" onclick="
+                    <button id="fetch-mail-btn" class="primary-btn" onclick="
                         const pwd = document.getElementById('temp-pwd-input').value;
                         if(pwd) {
                             // Save for all accounts (same password)
@@ -1261,7 +1262,8 @@ async function fetchFromCheckedAccounts() {
                             sessionStorage.setItem('mail_pwd_post', pwd);
                             fetchFromCheckedAccounts();
                         }
-                    ">Logg inn for denne økten</button>
+                    ">Hent e-poster</button>
+                    <p style="font-size: 11px; color: #666; margin-top: 10px;">Logges kun inn for denne økten</p>
                 </div>
             `;
         }
