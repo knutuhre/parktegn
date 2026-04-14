@@ -562,7 +562,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                                   'post@christianiaoppmerking.no', 'knut@christianiaoppmerking.no',
                                   'www.christianiaoppmerking.no', 'christianiaoppmerking.no',
                                   'reset your password', 'glemt passord', 'velkommen som bruker',
-                                  'anbudspuls.no', 'doffin.no', 'mercell.com']:
+                                  'doffin.no', 'mercell.com']:
                         combined_text = combined_text.replace(noise, '')
 
                     # Skip emails about insurance, company cars, and other non-quote topics
