@@ -995,7 +995,8 @@ function applyParkingAreaToQuote(areaInfo) {
 // ===== Email Panel =====
 let emailAccounts = [];
 let currentEmailAccount = '';
-let cachedEmails = [];  // Cache last fetched emails for re-rendering
+const EMAIL_CACHE_KEY = 'tilbud_email_cache';
+let cachedEmails = JSON.parse(localStorage.getItem(EMAIL_CACHE_KEY) || '[]');
 
 // Storage for custom accounts (transient - not saved to localStorage) and search range (persistent)
 let customEmailAccounts = [];
@@ -1112,6 +1113,10 @@ function setupEmailPanel() {
     // Open panel
     btn.addEventListener('click', () => {
         overlay.classList.add('open');
+        // Render from local cache immediately if we have data
+        if (cachedEmails.length > 0) {
+            renderEmailList(cachedEmails);
+        }
         if (emailAccounts.length === 0) {
             fetchEmailAccounts();
         }
@@ -1300,6 +1305,7 @@ async function fetchFromCheckedAccounts() {
         });
 
         cachedEmails = allEmails;
+        localStorage.setItem(EMAIL_CACHE_KEY, JSON.stringify(cachedEmails));
         currentEmailAccount = accounts.join(',');
         const unhandledCount = allEmails.filter(m => !isEmailHandled(m)).length;
         updateEmailBadge(unhandledCount);

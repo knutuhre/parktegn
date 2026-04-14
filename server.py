@@ -54,6 +54,60 @@ for i in range(1, 5):
         else:
             MAIL_ACCOUNTS[key] = {'user': user, 'password': pwd}
 
+# File for local email cache
+MAIL_CACHE_FILE = os.path.join(STATIC_DIR, 'mail_cache.json')
+
+class MailCache:
+    """Handles local persistence of flagged emails to avoid repeated IMAP fetches."""
+    def __init__(self, cache_file):
+        self.cache_file = cache_file
+        self.data = self._load()
+
+    def _load(self):
+        if os.path.exists(self.cache_file):
+            try:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"DEBUG: Could not load cache: {e}")
+        return {}
+
+    def save(self):
+        try:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"DEBUG: Could not save cache: {e}")
+
+    def get_emails(self, account=None):
+        """Returns all cached emails, optionally filtered by account."""
+        emails = list(self.data.values())
+        if account:
+            emails = [e for e in emails if e.get('_accountKey') == account]
+        # Sort by date newest first
+        emails.sort(key=lambda x: x.get('date', ''), reverse=True)
+        return emails
+
+    def add_emails(self, new_emails, account_key):
+        """Merges new emails into the cache."""
+        added_count = 0
+        for email in new_emails:
+            # Create a persistent unique key (ref_id is session-based, so we use metadata)
+            # Actually, let's keep ref_id for the UI, but use a stable key for storage
+            stable_key = hashlib.sha256(f"{account_key}:{email['from_email']}:{email['subject']}:{email['date']}".encode()).hexdigest()
+            
+            if stable_key not in self.data:
+                email['_accountKey'] = account_key
+                self.data[stable_key] = email
+                added_count += 1
+        
+        if added_count > 0:
+            self.save()
+        return added_count
+
+# Initialize global cache
+mail_cache = MailCache(MAIL_CACHE_FILE)
+
 # Keywords that suggest an email is a quote request for marking work
 QUOTE_KEYWORDS = [
     'tilbud', 'pris', 'prise', 'anbud', 'anbudsforespørsel',
@@ -315,8 +369,17 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             try:
-                emails = self._fetch_flagged_emails(user_email, pwd, days_back=days_int)
-                self._send_json(emails)
+                # 1. Fetch new emails since last fetch (using days_int) from IMAP
+                newly_fetched = self._fetch_flagged_emails(user_email, pwd, days_back=days_int)
+                
+                # 2. Add to persistent cache (this also saves to disk)
+                # Note: account_key is used here to group emails in the cache
+                mail_cache.add_emails(newly_fetched, account_key)
+                
+                # 3. Return the full combined cache for this account
+                # This ensures old emails stay in the list even if IMAP search range is small
+                final_list = mail_cache.get_emails(account=account_key)
+                self._send_json(final_list)
             except imaplib.IMAP4.error as e:
                 self._send_json({'error': f'Authentication failed for {user_email}: {str(e)}'}, 401)
             except Exception as e:
@@ -464,12 +527,13 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                     # Extract body text (plain text preferred)
                     body = self._extract_body(msg, max_chars=5000)
 
-                    # Check if it looks like a quote request
                     # Strip exact company identity phrases to avoid false matches from signatures
                     combined_text = (subject + ' ' + body).lower()
                     for noise in ['christiania oppmerking as', 'christiania oppmerking',
                                   'post@christianiaoppmerking.no', 'knut@christianiaoppmerking.no',
-                                  'www.christianiaoppmerking.no', 'christianiaoppmerking.no']:
+                                  'www.christianiaoppmerking.no', 'christianiaoppmerking.no',
+                                  'reset your password', 'glemt passord', 'velkommen som bruker',
+                                  'anbudspuls.no', 'doffin.no', 'mercell.com']:
                         combined_text = combined_text.replace(noise, '')
                     
                     matched_keywords = [kw for kw in QUOTE_KEYWORDS if kw in combined_text]
@@ -480,7 +544,9 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         continue
 
                     # Generate a short unique reference ID for the email
-                    ref_id = hashlib.md5(msg_id).hexdigest()[:4].upper()
+                    # We use a stable key based on metadata so it persists across sessions
+                    stable_hash = hashlib.md5(f"{from_email_addr}:{subject}:{date_iso}".encode()).hexdigest().upper()
+                    ref_id = stable_hash[:4]
                     print(f"DEBUG: Processed email {ref_id} - matched: {matched_keywords}")
 
                     # Extract image attachments as base64
