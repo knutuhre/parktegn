@@ -539,12 +539,28 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                     from_raw = msg.get('From', '')
                     from_name, from_email_addr = self._parse_from(from_raw)
 
-                    # Skip emails from own domain (sent by ourselves)
-                    # and from irrelevant platforms (LinkedIn, etc.)
+                    # Skip emails from own domain and irrelevant senders
+                    # Categories: own domain, social media, suppliers/tools, newsletters/magazines,
+                    # insurance, banks/finance, HR/webinar platforms, shipping, auto/fleet
                     skip_domains = [
-                        'christianiaoppmerking.no', 'linkedin.com', 'motek.no',
-                        'seilmagasinet.no', 'teknos.com', 'teknos.no',
-                        'econa.no', 'uscore.no', 'devinco.com',
+                        # Own domain
+                        'christianiaoppmerking.no',
+                        # Social / professional networks
+                        'linkedin.com',
+                        # Suppliers & tool vendors (not customers)
+                        'motek.no', 'teknos.com', 'teknos.no', 'metal-master.shop',
+                        # Magazines & newsletters
+                        'seilmagasinet.no', 'strawberry.no',
+                        # Insurance & finance
+                        'faircarinsurance.com', 'nordea.no', 'nordnet.no', 'uscore.no',
+                        # Associations, HR & webinar platforms
+                        'econa.no', 'devinco.com',
+                        # Retail & promotions
+                        'power.no', 'cedesa.es',
+                        # Shipping & logistics
+                        'bws.net',
+                        # Fleet & vehicle management
+                        'autosync.no', 'abax.com',
                     ]
                     if any(d in from_email_addr.lower() for d in skip_domains):
                         continue
@@ -569,8 +585,32 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                                   'doffin.no', 'mercell.com']:
                         combined_text = combined_text.replace(noise, '')
 
-                    # Skip emails about insurance, company cars, and other non-quote topics
-                    skip_subjects = ['oppgjør', 'firmabil', 'forsikring', 'skademelding', 'bilforsikring']
+                    # Skip emails about irrelevant topics based on subject keywords
+                    skip_subjects = [
+                        # Insurance & vehicles
+                        'oppgjør', 'firmabil', 'forsikring', 'skademelding', 'bilforsikring',
+                        'oppsigelse av firmabil',
+                        # Newsletters & marketing
+                        'nyhetsbrev', 'newsletter', 'salg', 'tilbud er her',
+                        # Password & account management
+                        'reset your password', 'passord',
+                        # Webinars & events
+                        'webinar',
+                        # Shipping & logistics
+                        'surcharge', 'baf ',
+                        # Finance & credit
+                        'kredittscore', 'bedriftskunde',
+                        # Fleet tracking
+                        'turer utenfor arbeidstid', 'autopass',
+                        # Auto-replies
+                        'automatic reply', 'autosvar', 'out of office',
+                        # Order confirmations (from suppliers TO us)
+                        'ordrebekreftelse', 'order no:',
+                        # Onboarding (not quote requests)
+                        'onboarding',
+                        # Ticket systems
+                        'ticket#',
+                    ]
                     subject_lower = subject.lower()
                     if any(s in subject_lower for s in skip_subjects):
                         continue
