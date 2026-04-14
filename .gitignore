@@ -25,3 +25,4 @@ venv/
 
 # Agent
 .agent/
+mail_cache.json
