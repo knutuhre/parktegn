@@ -561,6 +561,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         'bws.net',
                         # Fleet & vehicle management
                         'autosync.no', 'abax.com',
+                        # Other irrelevant senders
+                        'gevekomarkings.com',
                     ]
                     if any(d in from_email_addr.lower() for d in skip_domains):
                         continue
