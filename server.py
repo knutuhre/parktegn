@@ -89,11 +89,9 @@ class MailCache:
         return emails
 
     def add_emails(self, new_emails, account_key):
-        """Merges new emails into the cache."""
+        """Merges new emails into the cache and performs cleanup of old entries."""
         added_count = 0
         for email in new_emails:
-            # Create a persistent unique key (ref_id is session-based, so we use metadata)
-            # Actually, let's keep ref_id for the UI, but use a stable key for storage
             stable_key = hashlib.sha256(f"{account_key}:{email['from_email']}:{email['subject']}:{email['date']}".encode()).hexdigest()
             
             if stable_key not in self.data:
@@ -101,9 +99,38 @@ class MailCache:
                 self.data[stable_key] = email
                 added_count += 1
         
+        # Cleanup: Remove emails older than 90 days
+        self._cleanup()
+        
         if added_count > 0:
             self.save()
         return added_count
+
+    def _cleanup(self, max_days=90):
+        """Removes entries older than max_days."""
+        cutoff = datetime.now() - timedelta(days=max_days)
+        to_delete = []
+        for key, email in self.data.items():
+            try:
+                date_str = email.get('date', '')
+                if 'T' in date_str: # ISO format
+                    email_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    # Make cutoff offset-aware if email_date is offset-aware
+                    if email_date.tzinfo and not cutoff.tzinfo:
+                        from datetime import timezone
+                        cutoff_tz = cutoff.replace(tzinfo=timezone.utc)
+                        if email_date < cutoff_tz:
+                            to_delete.append(key)
+                    elif email_date < cutoff:
+                        to_delete.append(key)
+            except Exception as e:
+                print(f"DEBUG: Cleanup error for {key}: {e}")
+        
+        for key in to_delete:
+            del self.data[key]
+        
+        if to_delete:
+            print(f"DEBUG: Cleaned up {len(to_delete)} old email entries from cache.")
 
 # Initialize global cache
 mail_cache = MailCache(MAIL_CACHE_FILE)
