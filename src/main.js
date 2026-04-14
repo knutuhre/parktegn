@@ -170,24 +170,36 @@ async function init() {
         }
     });
 
-    // Load all parking areas on startup
-    loadingOverlay.classList.remove('hidden');
+    // Setup manual registry load button
+    const loadBtn = $('#load-registry-btn');
+    const preloadDiv = $('#registry-pre-load');
 
-    try {
-        allAreas = await fetchAllParkingAreas();
-        console.log(`Loaded ${allAreas.length} parking areas`);
-    } catch (err) {
-        console.error('Failed to load parking areas:', err);
-        loadingOverlay.querySelector('p').textContent =
-            'Kunne ikke laste parkeringsområder. Sjekk nettverkstilkobling.';
-        // Allow retry
-        setTimeout(() => {
+    loadBtn?.addEventListener('click', async () => {
+        preloadDiv.classList.add('hidden');
+        loadingOverlay.classList.remove('hidden');
+        loadingOverlay.querySelector('p').textContent = 'Henter parkeringsområder fra registeret...';
+
+        try {
+            allAreas = await fetchAllParkingAreas();
+            console.log(`Loaded ${allAreas.length} parking areas`);
+
+            // Enable search UI
+            if (searchInput) {
+                searchInput.disabled = false;
+                searchInput.placeholder = "Søk på adresse, f.eks. 'Storgata' eller 'Oslo'";
+                searchInput.focus();
+            }
+
             loadingOverlay.classList.add('hidden');
-        }, 3000);
-        return;
-    }
-
-    loadingOverlay.classList.add('hidden');
+        } catch (err) {
+            console.error('Failed to load parking areas:', err);
+            loadingOverlay.querySelector('p').textContent = 'Kunne ikke laste registeret. Vennligst prøv igjen.';
+            preloadDiv.classList.remove('hidden');
+            setTimeout(() => {
+                loadingOverlay.classList.add('hidden');
+            }, 3000);
+        }
+    });
 
     // Setup search
     setupSearch();

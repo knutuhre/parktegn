@@ -198,6 +198,47 @@ body {
     display: none !important;
 }
 
+/* Registry Pre-load State */
+.registry-pre-load {
+    margin-top: var(--space-xl);
+    text-align: center;
+    animation: fadeIn 0.8s ease-out 0.3s both;
+}
+
+.btn-load-registry {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-2xl);
+    background: linear-gradient(135deg, var(--bg-surface), var(--bg-elevated));
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    font-family: var(--font);
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-load-registry:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow);
+}
+
+.btn-load-registry svg {
+    color: var(--accent);
+}
+
+.registry-hint {
+    margin-top: var(--space-md);
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
 /* Search Results Dropdown */
 .search-results {
     position: absolute;
