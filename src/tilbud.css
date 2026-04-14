@@ -1416,6 +1416,67 @@ input[type="number"] {
     color: var(--text-primary);
 }
 
+/* Email Settings / Filters Section */
+.email-panel-settings {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-lg);
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.email-settings-left, .email-settings-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.email-settings-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.email-days-input {
+    width: 60px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    padding: 2px 6px;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.email-add-input {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    padding: 3px 8px;
+    font-size: 0.8rem;
+    min-width: 180px;
+}
+
+.email-add-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition-fast);
+}
+
+.email-add-btn:hover {
+    background: var(--accent-hover);
+}
+
 .email-group-body {
     display: flex;
     flex-direction: column;
@@ -1482,6 +1543,35 @@ input[type="number"] {
     font-size: 0.7rem;
     color: var(--text-muted);
     white-space: nowrap;
+}
+
+.email-card-ref {
+    font-family: monospace;
+    font-size: 0.7rem;
+    color: var(--accent-hover);
+    background: rgba(99, 102, 241, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.email-matched-keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: var(--space-sm);
+}
+
+.keyword-tag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: lowercase;
 }
 
 .email-dismiss-btn {

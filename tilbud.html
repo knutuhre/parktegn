@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="src/tilbud.css">
+    <link rel="stylesheet" href="src/tilbud.css?v=2">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
 </head>
 
@@ -105,6 +105,17 @@
                     </div>
                     <button class="email-refresh-btn" id="email-refresh-btn" title="Oppdater">🔄</button>
                     <button class="email-close-btn" id="email-close-btn">✕</button>
+                </div>
+            </div>
+            <div class="email-panel-settings" id="email-panel-settings">
+                <div class="email-settings-left">
+                    <span class="email-settings-label">Søk dager tilbake:</span>
+                    <input type="number" id="email-days-input" class="email-days-input" value="30" min="1" max="365">
+                </div>
+                <div class="email-settings-right">
+                    <span class="email-settings-label">Legg til e-post:</span>
+                    <input type="email" id="email-add-input" class="email-add-input" placeholder="navn@domene.no">
+                    <button id="email-add-btn" class="email-add-btn">Legg til</button>
                 </div>
             </div>
             <div class="email-panel-body" id="email-panel-body">
@@ -402,7 +413,7 @@
         </div>
     </div>
 
-    <script src="src/tilbud.js"></script>
+    <script src="src/tilbud.js?v=2"></script>
 </body>
 
 </html>

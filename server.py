@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.error
 import json
 import os
+import hashlib
 import sys
 import ssl
 import imaplib
@@ -285,28 +286,41 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         if path == '/mail/flagged':
             account_key = params.get('account', [''])[0]
+            days = params.get('days', ['30'])[0]
+            try:
+                days_int = int(days)
+            except:
+                days_int = 30
 
             if not account_key and MAIL_ACCOUNTS:
                 account_key = list(MAIL_ACCOUNTS.keys())[0]
 
-            if account_key not in MAIL_ACCOUNTS:
-                self._send_json({'error': f'Ukjent konto: {account_key}. Tilgjengelige: {list(MAIL_ACCOUNTS.keys())}'}, 400)
+            # Determine target user and default password
+            if account_key in MAIL_ACCOUNTS:
+                acc = MAIL_ACCOUNTS[account_key]
+                user_email = acc['user']
+                default_pwd = acc.get('password', '')
+            elif '@' in account_key:
+                # It's a full email address entered by user
+                user_email = account_key
+                default_pwd = ''
+            else:
+                self._send_json({'error': f'Ukjent konto eller ugyldig e-post: {account_key}'}, 400)
                 return
 
-            acc = MAIL_ACCOUNTS[account_key]
-            pwd = self.headers.get('X-Mail-Password', acc['password'])
+            pwd = self.headers.get('X-Mail-Password', default_pwd)
             
             if not pwd:
-                self._send_json({'error': 'Password required for IMAP'}, 401)
+                self._send_json({'error': f'Password required for {user_email}', 'account': user_email}, 401)
                 return
 
             try:
-                emails = self._fetch_flagged_emails(acc['user'], pwd)
+                emails = self._fetch_flagged_emails(user_email, pwd, days_back=days_int)
                 self._send_json(emails)
             except imaplib.IMAP4.error as e:
-                self._send_json({'error': f'Authentication failed: {str(e)}'}, 401)
+                self._send_json({'error': f'Authentication failed for {user_email}: {str(e)}'}, 401)
             except Exception as e:
-                self._send_json({'error': f'Feil ved henting av e-post: {str(e)}'}, 500)
+                self._send_json({'error': f'Feil ved henting av e-post for {user_email}: {str(e)}'}, 500)
             return
 
         self._send_json({'error': 'Ukjent mail-endepunkt'}, 404)
@@ -457,17 +471,24 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                                   'post@christianiaoppmerking.no', 'knut@christianiaoppmerking.no',
                                   'www.christianiaoppmerking.no', 'christianiaoppmerking.no']:
                         combined_text = combined_text.replace(noise, '')
-                    is_quote = any(kw in combined_text for kw in QUOTE_KEYWORDS)
+                    
+                    matched_keywords = [kw for kw in QUOTE_KEYWORDS if kw in combined_text]
+                    is_quote = len(matched_keywords) > 0
 
                     # Only include emails that look like quote requests
                     if not is_quote:
                         continue
+
+                    # Generate a short unique reference ID for the email
+                    ref_id = hashlib.md5(msg_id).hexdigest()[:4].upper()
+                    print(f"DEBUG: Processed email {ref_id} - matched: {matched_keywords}")
 
                     # Extract image attachments as base64
                     images = self._extract_images(msg, max_images=5, max_size_bytes=2*1024*1024)
 
                     emails.append({
                         'id': msg_id.decode(),
+                        'ref': ref_id,
                         'subject': subject,
                         'from_name': from_name,
                         'from_email': from_email_addr,
@@ -475,6 +496,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         'body_preview': body[:500] + ('...' if len(body) > 500 else ''),
                         'full_body': body,
                         'is_quote_request': is_quote,
+                        'matched_keywords': matched_keywords,
                         'images': images,
                     })
 

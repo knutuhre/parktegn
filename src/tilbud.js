@@ -997,6 +997,10 @@ let emailAccounts = [];
 let currentEmailAccount = '';
 let cachedEmails = [];  // Cache last fetched emails for re-rendering
 
+// Storage for custom accounts (transient - not saved to localStorage) and search range (persistent)
+let customEmailAccounts = [];
+let searchDays = parseInt(localStorage.getItem('tilbud_search_days') || '30');
+
 // Dismissed/handled emails stored in localStorage
 const DISMISSED_STORAGE_KEY = 'tilbud_dismissed_emails';
 // Now stores objects: { key: { status: 'not_job'|'priced', reason?: string, date: iso } }
@@ -1065,6 +1069,46 @@ function setupEmailPanel() {
 
     if (!btn || !overlay) return;
 
+    // Init settings UI
+    const daysInput = $('#email-days-input');
+    const addInput = $('#email-add-input');
+    const addBtn = $('#email-add-btn');
+
+    if (daysInput) {
+        daysInput.value = searchDays;
+        daysInput.addEventListener('change', () => {
+            searchDays = parseInt(daysInput.value) || 30;
+            localStorage.setItem('tilbud_search_days', searchDays);
+            
+            // Update subtitle if exists
+            const subtitle = $('.email-panel-subtitle');
+            if (subtitle) subtitle.textContent = `E-poster med forespørsel om oppmerking siste ${searchDays} dager`;
+        });
+    }
+
+    addBtn?.addEventListener('click', () => {
+        const email = addInput?.value.trim();
+        if (!email || !email.includes('@')) {
+            alert('Vennligst oppgi en gyldig e-postadresse');
+            return;
+        }
+
+        // Add to custom list if not already there
+        if (!customEmailAccounts.some(acc => acc.email === email)) {
+            const newAcc = { key: email, email: email, isCustom: true };
+            customEmailAccounts.push(newAcc);
+            // localStorage.removeItem('tilbud_custom_accounts'); // Ensure we don't accidentally save it
+            
+            // Re-render the account list
+            renderAccountCheckboxes();
+            
+            // Fetch immediately for the new account
+            fetchFromCheckedAccounts();
+        }
+        
+        if (addInput) addInput.value = '';
+    });
+
     // Open panel
     btn.addEventListener('click', () => {
         overlay.classList.add('open');
@@ -1106,26 +1150,9 @@ async function fetchEmailAccounts() {
             return;
         }
 
-        emailAccounts = data;
-        const container = $('#email-account-checkboxes');
-        if (!container) return;
-
-        container.innerHTML = '';
-        for (const acc of emailAccounts) {
-            const label = document.createElement('label');
-            label.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer; padding:4px 8px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px;';
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.value = acc.key;
-            cb.checked = true; // All checked by default
-            cb.style.cssText = 'accent-color:#6366f1; cursor:pointer;';
-            cb.addEventListener('change', () => {
-                fetchFromCheckedAccounts();
-            });
-            label.appendChild(cb);
-            label.appendChild(document.createTextNode(acc.email));
-            container.appendChild(label);
-        }
+        // Merge predefined with custom accounts
+        emailAccounts = [...data, ...customEmailAccounts];
+        renderAccountCheckboxes();
 
         // Auto-fetch all accounts
         if (emailAccounts.length > 0) {
@@ -1133,6 +1160,46 @@ async function fetchEmailAccounts() {
         }
     } catch (e) {
         showEmailError('Kunne ikke koble til serveren. Kjører du server.py?');
+    }
+}
+
+function renderAccountCheckboxes() {
+    const container = $('#email-account-checkboxes');
+    if (!container) return;
+
+    container.innerHTML = '';
+    for (const acc of emailAccounts) {
+        const label = document.createElement('label');
+        label.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer; padding:4px 8px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:6px; position:relative;';
+        
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = acc.key;
+        cb.checked = true; // All checked by default
+        cb.style.cssText = 'accent-color:#6366f1; cursor:pointer;';
+        cb.addEventListener('change', () => {
+            fetchFromCheckedAccounts();
+        });
+        
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(acc.email));
+        
+        // Add delete button for custom accounts
+        if (acc.isCustom) {
+            const delBtn = document.createElement('span');
+            delBtn.innerHTML = '×';
+            delBtn.style.cssText = 'margin-left:6px; color:#ef4444; font-weight:700; font-size:16px; line-height:1; cursor:pointer;';
+            delBtn.title = 'Fjern konto';
+            delBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                customEmailAccounts = customEmailAccounts.filter(a => a.key !== acc.key);
+                fetchEmailAccounts(); // Re-fetch from server + local memory
+            };
+            label.appendChild(delBtn);
+        }
+        
+        container.appendChild(label);
     }
 }
 
@@ -1144,6 +1211,8 @@ function getCheckedAccounts() {
 
 async function fetchFromCheckedAccounts() {
     const accounts = getCheckedAccounts();
+    const days = parseInt($('#email-days-input')?.value) || 30;
+    
     if (accounts.length === 0) {
         cachedEmails = [];
         renderEmailList([]);
@@ -1197,7 +1266,7 @@ async function fetchFromCheckedAccounts() {
     try {
         // Fetch from all checked accounts in parallel
         const results = await Promise.allSettled(
-            accounts.map(accKey => fetchSingleAccount(accKey))
+            accounts.map(accKey => fetchSingleAccount(accKey, days))
         );
 
         if (loading) loading.style.display = 'none';
@@ -1247,13 +1316,13 @@ async function fetchFromCheckedAccounts() {
     }
 }
 
-async function fetchSingleAccount(accountKey) {
+async function fetchSingleAccount(accountKey, days = 30) {
     const reqHeaders = {};
     const storedPwd = sessionStorage.getItem(`mail_pwd_${accountKey}`);
     if (storedPwd) {
         reqHeaders['X-Mail-Password'] = storedPwd;
     }
-    const resp = await fetch(`/mail/flagged?account=${encodeURIComponent(accountKey)}`, {
+    const resp = await fetch(`/mail/flagged?account=${encodeURIComponent(accountKey)}&days=${days}`, {
         headers: reqHeaders
     });
     if (resp.status === 401) {
@@ -1377,14 +1446,26 @@ function createEmailCard(mail) {
         }
     }
 
+    // Keywords tags
+    const keywordsHtml = mail.matched_keywords && mail.matched_keywords.length > 0 ? `
+        <div class="email-matched-keywords" title="Søkeord som gjorde at denne e-posten ble inkludert">
+            ${mail.matched_keywords.map(kw => `<span class="keyword-tag">${escapeHtml(kw)}</span>`).join('')}
+        </div>
+    ` : '';
+
+    // DEBUG: log mail object to console
+    console.log(`Rendering email ${mail.ref || 'NO-REF'}:`, mail);
+
     card.innerHTML = `
         <div class="email-card-header">
             <div class="email-card-subject-line">${escapeHtml(mail.subject)}</div>
             <div class="email-card-header-right">
+                ${mail.ref ? `<span class="email-card-ref">REF: ${escapeHtml(mail.ref)}</span>` : ''}
                 <span class="email-card-date">${dateStr}</span>
                 ${statusBadge}
             </div>
         </div>
+        ${keywordsHtml}
         <div class="email-card-preview">${escapeHtml(preview)}</div>
         ${mail.images && mail.images.length > 0 ? `
             <div class="email-card-thumbs">
