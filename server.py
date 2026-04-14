@@ -541,7 +541,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
                     # Skip emails from own domain (sent by ourselves)
                     # and from irrelevant platforms (LinkedIn, etc.)
-                    skip_domains = ['christianiaoppmerking.no', 'linkedin.com']
+                    skip_domains = ['christianiaoppmerking.no', 'linkedin.com', 'motek.no']
                     if any(d in from_email_addr.lower() for d in skip_domains):
                         continue
 
