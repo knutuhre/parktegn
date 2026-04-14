@@ -95,18 +95,19 @@
     <div class="email-overlay" id="email-overlay">
         <div class="email-panel" id="email-panel">
             <div class="email-panel-header">
-                <div class="email-panel-title">
-                    <h2>📧 Forespørsler</h2>
-                    <p class="email-panel-subtitle">E-poster med forespørsel om oppmerking siste 30 dager</p>
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                    <div class="email-panel-title">
+                        <h2>📧 Forespørsler</h2>
+                    </div>
+                    <button class="email-close-btn" id="email-close-btn">✕</button>
                 </div>
-                <div class="email-panel-controls">
-                    <div id="email-account-checkboxes" class="email-account-checkboxes" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; width:100%; margin-top:8px;">
+                    <div id="email-account-checkboxes" class="email-account-checkboxes" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex:1;">
                         <span style="font-size:12px; color:#94a3b8;">Laster kontoer...</span>
                     </div>
                     <button class="btn-fetch-emails" id="btn-fetch-emails">
                         <span>🔍</span> Hent e-poster
                     </button>
-                    <button class="email-close-btn" id="email-close-btn">✕</button>
                 </div>
             </div>
             <div class="email-panel-settings" id="email-panel-settings">
