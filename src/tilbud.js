@@ -1066,7 +1066,6 @@ function setupEmailPanel() {
     const btn = $('#email-btn');
     const overlay = $('#email-overlay');
     const closeBtn = $('#email-close-btn');
-    const refreshBtn = $('#email-refresh-btn');
 
     if (!btn || !overlay) return;
 
