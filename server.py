@@ -515,7 +515,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             mail.login(username, password)
             mail.select('INBOX', readonly=True)
 
-            # Search ALL emails since date (not just flagged)
+            # Search ALL emails since date
             status, msg_ids = mail.search(None, f'(SINCE {since_date})')
             if status != 'OK' or not msg_ids[0]:
                 return []
@@ -523,78 +523,115 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             id_list = msg_ids[0].split()
             emails = []
 
+            # --- BLOCKED DOMAINS (checked on headers only) ---
+            skip_domains = [
+                'christianiaoppmerking.no', 'linkedin.com',
+                'motek.no', 'teknos.com', 'teknos.no', 'metal-master.shop',
+                'nfh.as', 'novtech.no', 'doka-mail.com',
+                'seilmagasinet.no', 'strawberry.no', 'megger.no', 'mobit.no',
+                'faircarinsurance.com', 'nordea.no', 'nordnet.no', 'uscore.no',
+                'lendo.no', 'adv-finance.com',
+                'econa.no', 'devinco.com', 'virke.no', 'styreforeningen.no',
+                'new-skills.no', 'liveexpo.se',
+                'power.no', 'cedesa.es',
+                'bws.net',
+                'autosync.no', 'abax.com',
+                'gevekomarkings.com',
+                'fakturereenkelt.com', 'mailcloudlead.com', 'fluxara-7.com',
+                'core-temp.no', 'trackday.no', 'tidsbanken.no',
+                'lf-norge.com', 'lfdesign-norge.com',
+                'log.no', 'railway.app', 'stripe.com', 'smartsheet.com',
+            ]
+
+            # --- BLOCKED SUBJECTS ---
+            skip_subjects = [
+                'oppgjør', 'firmabil', 'forsikring', 'skademelding', 'bilforsikring',
+                'oppsigelse av firmabil',
+                'nyhetsbrev', 'newsletter',
+                'reset your password', 'passord',
+                'webinar', 'miljøforum',
+                'surcharge', 'baf ',
+                'kredittscore', 'bedriftskunde', 'likviditet', 'investeringslån',
+                'rentemøte', 'boligverdi', 'boligpriser',
+                'turer utenfor arbeidstid', 'autopass',
+                'automatic reply', 'autosvar', 'out of office',
+                'ordrebekreftelse', 'order no:',
+                'onboarding', 'ticket#',
+                'styrekandidat', 'bonus- og aksjeprogram', 'vernerunder',
+                'årshjul', 'ferieoversikt', 'ferieplanlegging', 'timeregistrering',
+                'vanskelige personer', 'spar ', 'spare penger',
+                'book tid', 'byggestart', 'på lager',
+                'siste sjanse', 'selgende hjemmeside',
+                'vårrengjøring', 'speed bump', 'your receipt from',
+                'breem', 'takprodukter', 'finér',
+            ]
+
+            print(f'  📬 Found {len(id_list)} emails since {since_date}')
+
+            # ========== PASS 1: Fetch HEADERS ONLY (fast) ==========
+            # This avoids downloading full email bodies + attachments for spam
+            candidates = []
             for msg_id in id_list:
                 try:
-                    status, msg_data = mail.fetch(msg_id, '(RFC822)')
+                    status, hdr_data = mail.fetch(msg_id, '(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])')
                     if status != 'OK':
                         continue
 
-                    raw_email = msg_data[0][1]
-                    msg = email_lib.message_from_bytes(raw_email)
-
-                    # Decode subject
-                    subject = self._decode_mime_header(msg.get('Subject', '(Uten emne)'))
+                    hdr_bytes = hdr_data[0][1]
+                    hdr_msg = email_lib.message_from_bytes(hdr_bytes)
 
                     # Decode sender
-                    from_raw = msg.get('From', '')
+                    from_raw = hdr_msg.get('From', '')
                     from_name, from_email_addr = self._parse_from(from_raw)
 
-                    # Skip emails from own domain and irrelevant senders
-                    # Categories: own domain, social media, suppliers/tools, newsletters/magazines,
-                    # insurance, banks/finance, HR/webinar platforms, shipping, auto/fleet
-                    skip_domains = [
-                        # Own domain
-                        'christianiaoppmerking.no',
-                        # Social / professional networks
-                        'linkedin.com',
-                        # Suppliers & tool vendors (not customers)
-                        'motek.no', 'teknos.com', 'teknos.no', 'metal-master.shop',
-                        'nfh.as',  # Norwegian Fastener House (screws)
-                        'novtech.no',  # GPS equipment
-                        'doka-mail.com',  # Construction supplies
-                        # Magazines & newsletters
-                        'seilmagasinet.no', 'strawberry.no', 'megger.no', 'mobit.no',
-                        # Insurance & finance
-                        'faircarinsurance.com', 'nordea.no', 'nordnet.no', 'uscore.no',
-                        'lendo.no', 'adv-finance.com',
-                        # Associations, HR & webinar platforms
-                        'econa.no', 'devinco.com', 'virke.no', 'styreforeningen.no',
-                        'new-skills.no', 'liveexpo.se',
-                        # Retail & promotions
-                        'power.no', 'cedesa.es',
-                        # Shipping & logistics
-                        'bws.net',
-                        # Fleet & vehicle management
-                        'autosync.no', 'abax.com',
-                        # Other irrelevant senders
-                        'gevekomarkings.com',
-                        # Cold outreach / spam / marketing
-                        'fakturereenkelt.com', 'mailcloudlead.com', 'fluxara-7.com',
-                        'core-temp.no',  # Cleaning services
-                        'trackday.no',  # Car track events
-                        'tidsbanken.no',  # Time tracking SaaS
-                        'lf-norge.com', 'lfdesign-norge.com',  # Web design spam
-                        'log.no',  # Logistics info
-                        'railway.app',  # Our own hosting provider
-                        'stripe.com',  # Payment receipts
-                        'smartsheet.com',  # Project management notifications
-                    ]
-                    if any(d in from_email_addr.lower() for d in skip_domains):
+                    # Quick domain check
+                    email_lower = from_email_addr.lower()
+                    if any(d in email_lower for d in skip_domains):
+                        continue
+
+                    # Decode subject
+                    subject = self._decode_mime_header(hdr_msg.get('Subject', '(Uten emne)'))
+                    subject_lower = subject.lower()
+
+                    # Quick subject check
+                    if any(s in subject_lower for s in skip_subjects):
                         continue
 
                     # Parse date
-                    date_str = msg.get('Date', '')
+                    date_str = hdr_msg.get('Date', '')
                     try:
                         date_parsed = email_lib.utils.parsedate_to_datetime(date_str)
                         date_iso = date_parsed.isoformat()
                     except Exception:
                         date_iso = date_str
 
-                    # Extract body text (plain text preferred)
+                    candidates.append({
+                        'msg_id': msg_id,
+                        'from_name': from_name,
+                        'from_email': from_email_addr,
+                        'subject': subject,
+                        'date': date_iso,
+                    })
+                except Exception:
+                    continue
+
+            print(f'  ✅ Pass 1 done: {len(candidates)} candidates from {len(id_list)} emails')
+
+            # ========== PASS 2: Fetch FULL BODY only for candidates ==========
+            for cand in candidates:
+                try:
+                    status, msg_data = mail.fetch(cand['msg_id'], '(RFC822)')
+                    if status != 'OK':
+                        continue
+
+                    raw_email = msg_data[0][1]
+                    msg = email_lib.message_from_bytes(raw_email)
+
+                    # Extract body text
                     body = self._extract_body(msg, max_chars=5000)
 
-                    # Strip exact company identity phrases to avoid false matches from signatures
-                    combined_text = (subject + ' ' + body).lower()
+                    # Keyword matching on combined text
+                    combined_text = (cand['subject'] + ' ' + body).lower()
                     for noise in ['christiania oppmerking as', 'christiania oppmerking',
                                   'post@christianiaoppmerking.no', 'knut@christianiaoppmerking.no',
                                   'www.christianiaoppmerking.no', 'christianiaoppmerking.no',
@@ -602,82 +639,33 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                                   'doffin.no', 'mercell.com']:
                         combined_text = combined_text.replace(noise, '')
 
-                    # Skip emails about irrelevant topics based on subject keywords
-                    skip_subjects = [
-                        # Insurance & vehicles
-                        'oppgjør', 'firmabil', 'forsikring', 'skademelding', 'bilforsikring',
-                        'oppsigelse av firmabil',
-                        # Newsletters & marketing
-                        'nyhetsbrev', 'newsletter',
-                        # Password & account management
-                        'reset your password', 'passord',
-                        # Webinars & events
-                        'webinar', 'miljøforum',
-                        # Shipping & logistics
-                        'surcharge', 'baf ',
-                        # Finance & credit
-                        'kredittscore', 'bedriftskunde', 'likviditet', 'investeringslån',
-                        'rentemøte', 'boligverdi', 'boligpriser',
-                        # Fleet tracking
-                        'turer utenfor arbeidstid', 'autopass',
-                        # Auto-replies
-                        'automatic reply', 'autosvar', 'out of office',
-                        # Order confirmations (from suppliers TO us)
-                        'ordrebekreftelse', 'order no:',
-                        # Onboarding (not quote requests)
-                        'onboarding',
-                        # Ticket systems
-                        'ticket#',
-                        # HR & admin (not jobs)
-                        'styrekandidat', 'bonus- og aksjeprogram', 'vernerunder',
-                        'årshjul', 'ferieoversikt', 'ferieplanlegging',
-                        'timeregistrering',
-                        # Cold outreach & spam
-                        'vanskelige personer', 'spar ', 'spare penger',
-                        'book tid', 'byggestart', 'på lager',
-                        'siste sjanse', 'selgende hjemmeside',
-                        'vårrengjøring', 'speed bump',
-                        'your receipt from',
-                        # Construction supplies (not marking jobs)
-                        'breem', 'takprodukter', 'finér',
-                    ]
-                    subject_lower = subject.lower()
-                    if any(s in subject_lower for s in skip_subjects):
-                        continue
-                    
                     matched_keywords = [kw for kw in QUOTE_KEYWORDS if kw in combined_text]
-                    is_quote = len(matched_keywords) > 0
-
-                    # Only include emails that look like quote requests
-                    if not is_quote:
+                    if not matched_keywords:
                         continue
 
-                    # Generate a short unique reference ID for the email
-                    # We use a stable key based on metadata so it persists across sessions
-                    stable_hash = hashlib.md5(f"{from_email_addr}:{subject}:{date_iso}".encode()).hexdigest().upper()
+                    # Generate stable reference ID
+                    stable_hash = hashlib.md5(f"{cand['from_email']}:{cand['subject']}:{cand['date']}".encode()).hexdigest().upper()
                     ref_id = stable_hash[:4]
-                    print(f"DEBUG: Processed email {ref_id} - matched: {matched_keywords}")
-
-                    # Extract image attachments as base64
-                    images = self._extract_images(msg, max_images=5, max_size_bytes=2*1024*1024)
 
                     emails.append({
-                        'id': msg_id.decode(),
+                        'id': cand['msg_id'].decode(),
                         'ref': ref_id,
-                        'subject': subject,
-                        'from_name': from_name,
-                        'from_email': from_email_addr,
-                        'date': date_iso,
+                        'subject': cand['subject'],
+                        'from_name': cand['from_name'],
+                        'from_email': cand['from_email'],
+                        'date': cand['date'],
                         'body_preview': body[:500] + ('...' if len(body) > 500 else ''),
                         'full_body': body,
-                        'is_quote_request': is_quote,
+                        'is_quote_request': True,
                         'matched_keywords': matched_keywords,
-                        'images': images,
+                        'images': [],  # Skip image extraction for speed
                     })
 
                 except Exception as e:
-                    print(f'  Warning: Could not parse email {msg_id}: {e}')
+                    print(f'  Warning: Could not parse email {cand["msg_id"]}: {e}')
                     continue
+
+            print(f'  🎯 Pass 2 done: {len(emails)} quote requests found')
 
             # Sort by date, newest first
             emails.sort(key=lambda x: x.get('date', ''), reverse=True)
