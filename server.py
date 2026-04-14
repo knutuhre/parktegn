@@ -540,7 +540,9 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                     from_name, from_email_addr = self._parse_from(from_raw)
 
                     # Skip emails from own domain (sent by ourselves)
-                    if 'christianiaoppmerking.no' in from_email_addr.lower():
+                    # and from irrelevant platforms (LinkedIn, etc.)
+                    skip_domains = ['christianiaoppmerking.no', 'linkedin.com']
+                    if any(d in from_email_addr.lower() for d in skip_domains):
                         continue
 
                     # Parse date
