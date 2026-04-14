@@ -549,12 +549,17 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         'linkedin.com',
                         # Suppliers & tool vendors (not customers)
                         'motek.no', 'teknos.com', 'teknos.no', 'metal-master.shop',
+                        'nfh.as',  # Norwegian Fastener House (screws)
+                        'novtech.no',  # GPS equipment
+                        'doka-mail.com',  # Construction supplies
                         # Magazines & newsletters
-                        'seilmagasinet.no', 'strawberry.no',
+                        'seilmagasinet.no', 'strawberry.no', 'megger.no', 'mobit.no',
                         # Insurance & finance
                         'faircarinsurance.com', 'nordea.no', 'nordnet.no', 'uscore.no',
+                        'lendo.no', 'adv-finance.com',
                         # Associations, HR & webinar platforms
-                        'econa.no', 'devinco.com',
+                        'econa.no', 'devinco.com', 'virke.no', 'styreforeningen.no',
+                        'new-skills.no', 'liveexpo.se',
                         # Retail & promotions
                         'power.no', 'cedesa.es',
                         # Shipping & logistics
@@ -563,6 +568,16 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         'autosync.no', 'abax.com',
                         # Other irrelevant senders
                         'gevekomarkings.com',
+                        # Cold outreach / spam / marketing
+                        'fakturereenkelt.com', 'mailcloudlead.com', 'fluxara-7.com',
+                        'core-temp.no',  # Cleaning services
+                        'trackday.no',  # Car track events
+                        'tidsbanken.no',  # Time tracking SaaS
+                        'lf-norge.com', 'lfdesign-norge.com',  # Web design spam
+                        'log.no',  # Logistics info
+                        'railway.app',  # Our own hosting provider
+                        'stripe.com',  # Payment receipts
+                        'smartsheet.com',  # Project management notifications
                     ]
                     if any(d in from_email_addr.lower() for d in skip_domains):
                         continue
@@ -593,15 +608,16 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         'oppgjør', 'firmabil', 'forsikring', 'skademelding', 'bilforsikring',
                         'oppsigelse av firmabil',
                         # Newsletters & marketing
-                        'nyhetsbrev', 'newsletter', 'salg', 'tilbud er her',
+                        'nyhetsbrev', 'newsletter',
                         # Password & account management
                         'reset your password', 'passord',
                         # Webinars & events
-                        'webinar',
+                        'webinar', 'miljøforum',
                         # Shipping & logistics
                         'surcharge', 'baf ',
                         # Finance & credit
-                        'kredittscore', 'bedriftskunde',
+                        'kredittscore', 'bedriftskunde', 'likviditet', 'investeringslån',
+                        'rentemøte', 'boligverdi', 'boligpriser',
                         # Fleet tracking
                         'turer utenfor arbeidstid', 'autopass',
                         # Auto-replies
@@ -612,6 +628,18 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         'onboarding',
                         # Ticket systems
                         'ticket#',
+                        # HR & admin (not jobs)
+                        'styrekandidat', 'bonus- og aksjeprogram', 'vernerunder',
+                        'årshjul', 'ferieoversikt', 'ferieplanlegging',
+                        'timeregistrering',
+                        # Cold outreach & spam
+                        'vanskelige personer', 'spar ', 'spare penger',
+                        'book tid', 'byggestart', 'på lager',
+                        'siste sjanse', 'selgende hjemmeside',
+                        'vårrengjøring', 'speed bump',
+                        'your receipt from',
+                        # Construction supplies (not marking jobs)
+                        'breem', 'takprodukter', 'finér',
                     ]
                     subject_lower = subject.lower()
                     if any(s in subject_lower for s in skip_subjects):
