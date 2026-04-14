@@ -1360,6 +1360,16 @@ function renderEmailList(emails) {
     }
     if (empty) empty.style.display = 'none';
 
+    // Add a manual search button at the top of the list for better visibility
+    const refreshHeader = document.createElement('div');
+    refreshHeader.className = 'email-list-refresh-header';
+    refreshHeader.innerHTML = `
+        <button class="primary-btn search-cta-btn" onclick="fetchFromCheckedAccounts()">
+            <span>🔍</span> Søk etter nye forespørsler
+        </button>
+    `;
+    container.appendChild(refreshHeader);
+
     // Group emails by sender address
     const groups = new Map();
     for (const mail of emails) {
