@@ -10,6 +10,7 @@ import urllib.parse
 import urllib.error
 import json
 import os
+import re
 import hashlib
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -229,6 +230,256 @@ QUOTE_KEYWORDS = [
 ]
 
 
+# ============================================================
+# Smart e-postklassifisering + info-uttrekk
+# ============================================================
+
+# Brukes til å fjerne støy før søk (egen signatur, interne lenker osv.)
+NOISE_PHRASES = [
+    'christiania oppmerking as', 'christiania oppmerking',
+    'post@christianiaoppmerking.no', 'knut@christianiaoppmerking.no',
+    'www.christianiaoppmerking.no', 'christianiaoppmerking.no',
+    'reset your password', 'glemt passord', 'velkommen som bruker',
+    'doffin.no', 'mercell.com',
+]
+
+# Score-baserte signaler. Høyere = sterkere kjøpssignal.
+STRONG_POSITIVE = [
+    'tilbud', 'pristilbud', 'prisforespørsel', 'pris forespørsel',
+    'anbudsforespørsel', 'anbud', 'forespørsel',
+    'kan dere gi', 'kan dere prise', 'kan dere tilby', 'kan dere levere',
+    'kan dere utføre', 'ønsker tilbud', 'ønsker pris', 'trenger pris',
+    'trenger tilbud', 'innhente tilbud', 'ber om tilbud', 'be om pris',
+    'kostnadsoverslag', 'kostnadsestimat', 'prisoverslag',
+    'befaring', 'oppmåling',
+]
+DOMAIN_POSITIVE = [
+    'oppmerking', 'vegmerking', 'veioppmerking', 'veg oppmerking',
+    'linjemerking', 'merking av', 'oppmerke', 'remerking', 'fjerne merking',
+    'demarkering', 'termoplast', 'kaldplast',
+    'parkeringsplass', 'p-plass', 'hc-plass', 'hc plass', 'parkeringshus',
+    'parkeringsanlegg', 'parkeringsareal',
+    'gangfelt', 'fotgjengerfelt', 'sykkelfelt', 'sykkelsti',
+    'sperreområde', 'rutemønster', 'fartshumper',
+    'skilting', 'parkeringsskilt', 'trafikkskilt',
+    'ladeplass', 'ladestasjon',
+]
+WEAK_POSITIVE = [
+    'pris', 'prise', 'merke', 'merking', 'male', 'maling',
+    'stripe', 'striper', 'linje', 'linjer',
+    'parkering', 'asfalt', 'skilt', 'garasje',
+    'oppdrag', 'jobb', 'arbeid', 'bestille', 'bestilling',
+]
+# Sterke negative signaler: gir negativ score
+STRONG_NEGATIVE = [
+    'ordrebekreftelse', 'order confirmation', 'order no:', 'order #',
+    'din ordre', 'your order', 'ordrestatus', 'order status',
+    'leveringsbekreftelse', 'shipment', 'shipping confirmation',
+    'faktura ', 'fakturanr', 'invoice', 'your receipt',
+    'kvittering for', 'kontoutskrift', 'lønnsslipp', 'paystub',
+    'nyhetsbrev', 'newsletter', 'unsubscribe',
+    'webinar', 'påmelding', 'register now', 'book tid',
+    'auto-reply', 'automatic reply', 'out of office', 'autosvar',
+    'reset your password', 'verifiser', 'verification code',
+    'ticket#', 'support ticket', 'onboarding',
+]
+
+# Pre-kompilert for hastighet
+RE_STRONG_POS = re.compile('|'.join(re.escape(w) for w in STRONG_POSITIVE))
+RE_DOMAIN_POS = re.compile('|'.join(re.escape(w) for w in DOMAIN_POSITIVE))
+RE_WEAK_POS = re.compile('|'.join(re.escape(w) for w in WEAK_POSITIVE))
+RE_STRONG_NEG = re.compile('|'.join(re.escape(w) for w in STRONG_NEGATIVE))
+RE_NOISE = re.compile('|'.join(re.escape(w) for w in NOISE_PHRASES))
+
+# Info-uttrekk: forhåndskompilerte mønstre
+RE_PHONE = re.compile(r'(?:\+47[\s\-]?)?(?:\d{2}[\s\-]?\d{2}[\s\-]?\d{2}[\s\-]?\d{2}|\d{3}[\s\-]?\d{2}[\s\-]?\d{3})')
+RE_POSTAL_CITY = re.compile(r'\b(\d{4})\s+([A-ZÆØÅ][A-ZÆØÅa-zæøå\-]+(?:\s+[A-ZÆØÅ][A-ZÆØÅa-zæøå\-]+)?)\b')
+RE_STREET = re.compile(r'\b([A-ZÆØÅ][a-zæøåA-ZÆØÅ\-]+(?:vei|veien|veg|vegen|gate|gata|plass|allé|alle|tunet)[\s]*\d+[A-Za-z]?)\b')
+RE_QUANTITY = re.compile(r'(\d{1,4}(?:[.,]\d+)?)\s*(plass(?:er)?|p-plass(?:er)?|hc[\s\-]?plass(?:er)?|m²|m2|kvm|kvadratmeter|meter\b|løpemeter|lm\b|stk\b|linjer?|piler?)', re.IGNORECASE)
+RE_URGENT = re.compile(r'\b(haster|snarest|så\s+snart|asap|innen\s+(?:uke\s+)?\d+|innen\s+\w+dag|denne\s+uken|neste\s+uke)\b', re.IGNORECASE)
+RE_ORGNR = re.compile(r'\b(?:org[\.\s]?nr[\.\s]?:?\s*)?(\d{3}[\s\.]?\d{3}[\s\.]?\d{3})\b', re.IGNORECASE)
+RE_SIGNOFF = re.compile(r'(?:med\s+vennlig\s+hilsen|mvh|vennlig\s+hilsen|hilsen|best\s+regards|regards|kind\s+regards)[,\s:\.]+\s*\n?\s*([^\n<]{2,60})', re.IGNORECASE)
+RE_QUESTION = re.compile(r'\?')
+
+
+def classify_email(subject, body, from_name, from_email):
+    """
+    Score-basert klassifisering av om en e-post er et reelt
+    tilbudsforespørsel/oppdrag. Returnerer (score, reasons, is_candidate).
+
+    Terskel: score >= 3 anses som kandidat.
+    """
+    subj_lower = (subject or '').lower()
+    body_lower = (body or '').lower()
+    # Fjern støy (egen signatur etc.) fra søkbar tekst
+    combined = RE_NOISE.sub(' ', subj_lower + ' \n ' + body_lower)
+
+    score = 0
+    reasons = []
+
+    # Sterke negativer først (skal avvise effektivt)
+    neg_hits = RE_STRONG_NEG.findall(combined)
+    if neg_hits:
+        score -= 4 * len(set(neg_hits))
+        reasons.append(f'neg:{",".join(set(neg_hits))[:80]}')
+
+    # Sterke positiver (treff i emne teller dobbelt)
+    subj_strong = set(RE_STRONG_POS.findall(subj_lower))
+    body_strong = set(RE_STRONG_POS.findall(body_lower))
+    if subj_strong:
+        score += 4 * len(subj_strong)
+        reasons.append(f'subj-strong:{",".join(subj_strong)[:80]}')
+    elif body_strong:
+        score += 3 * len(body_strong)
+        reasons.append(f'body-strong:{",".join(body_strong)[:80]}')
+
+    # Bransje-signaler
+    subj_dom = set(RE_DOMAIN_POS.findall(subj_lower))
+    body_dom = set(RE_DOMAIN_POS.findall(body_lower))
+    dom_all = subj_dom | body_dom
+    if subj_dom:
+        score += 3 * min(len(subj_dom), 3)
+    elif body_dom:
+        score += 2 * min(len(body_dom), 3)
+    if dom_all:
+        reasons.append(f'domain:{",".join(list(dom_all)[:3])[:80]}')
+
+    # Svake signaler – maks 2 poeng
+    weak_hits = set(RE_WEAK_POS.findall(combined))
+    if weak_hits:
+        score += min(len(weak_hits), 2)
+        reasons.append(f'weak:{",".join(list(weak_hits)[:3])[:60]}')
+
+    # Kontekstuelle bonuser
+    if RE_QUESTION.search(subject or ''):
+        score += 1
+        reasons.append('q-in-subject')
+    if RE_PHONE.search(body or ''):
+        score += 1
+    if RE_POSTAL_CITY.search(body or ''):
+        score += 1
+        reasons.append('has-address')
+
+    # Privat/personlig avsender gir bonus (gmail, outlook, hotmail, online)
+    email_low = (from_email or '').lower()
+    if any(p in email_low for p in ['@gmail.', '@outlook.', '@hotmail.', '@live.', '@online.no', '@icloud.']):
+        score += 1
+        reasons.append('personal-domain')
+
+    # Svært kort tekst uten signaler er sjelden ekte forespørsel
+    if len(body_lower) < 60 and not (subj_strong or body_strong or dom_all):
+        score -= 2
+        reasons.append('too-short')
+
+    return score, reasons, score >= 3
+
+
+def extract_info(body, subject, from_name, from_email):
+    """
+    Henter ut strukturert info fra e-post-body. Brukes av frontend
+    for å forhåndsutfylle tilbudet.
+    """
+    info = {}
+    text = body or ''
+
+    # Telefon – ta første plausible treff (dedup)
+    phones = []
+    for m in RE_PHONE.finditer(text):
+        p = re.sub(r'[\s\-]', '', m.group(0))
+        if p.startswith('+47'):
+            p = p[3:]
+        if len(p) == 8 and p.isdigit() and p not in phones:
+            phones.append(p)
+    if phones:
+        info['phones'] = phones[:2]
+
+    # Adresse: gate + postnummer + sted
+    street_m = RE_STREET.search(text)
+    postal_m = RE_POSTAL_CITY.search(text)
+    if street_m:
+        info['street'] = street_m.group(1).strip()
+    if postal_m:
+        info['postal_code'] = postal_m.group(1)
+        info['city'] = postal_m.group(2).strip()
+
+    # Mengde/omfang (plasser, m², meter osv.)
+    quantities = []
+    for m in RE_QUANTITY.finditer(text):
+        quantities.append({'value': m.group(1), 'unit': m.group(2).lower().strip()})
+    if quantities:
+        info['quantities'] = quantities[:8]
+
+    # Hastverk
+    urgent_m = RE_URGENT.search(text)
+    if urgent_m:
+        info['urgent'] = urgent_m.group(1).lower()
+
+    # Org.nr.
+    orgnr_m = RE_ORGNR.search(text)
+    if orgnr_m:
+        digits = re.sub(r'[\s\.]', '', orgnr_m.group(1))
+        if len(digits) == 9:
+            info['orgnr'] = digits
+
+    # Kontaktnavn fra signatur (foretrekkes over 'From:' display name ved konflikt)
+    sig_m = RE_SIGNOFF.search(text)
+    if sig_m:
+        name = sig_m.group(1).strip(' \t,.-')
+        # Fjern e-post/telefon som ofte følger navnet på samme linje
+        name = re.split(r'[\|\t•]|  +', name)[0].strip()
+        if 2 <= len(name) <= 50 and not name.lower().startswith(('http', 'www')):
+            info['signature_name'] = name
+
+    return info
+
+
+# ============================================================
+# IMAP UID-state – persistent, for inkrementell henting
+# ============================================================
+MAIL_UID_STATE_FILE = os.path.join(STATIC_DIR, 'mail_uid_state.json')
+
+
+class UidState:
+    """
+    Per konto: { uidvalidity: int, last_uid: int }. Brukes til
+    IMAP UID FETCH {last_uid+1}:* slik at vi slipper å re-sjekke
+    e-poster vi allerede har sett.
+    """
+    def __init__(self, filepath):
+        self.filepath = filepath
+        self.data = self._load()
+
+    def _load(self):
+        if os.path.exists(self.filepath):
+            try:
+                with open(self.filepath, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
+
+    def save(self):
+        try:
+            with open(self.filepath, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f'DEBUG: Could not save uid state: {e}')
+
+    def get(self, account_key):
+        return self.data.get(account_key, {})
+
+    def update(self, account_key, uidvalidity, last_uid):
+        self.data[account_key] = {'uidvalidity': int(uidvalidity), 'last_uid': int(last_uid)}
+        self.save()
+
+    def reset(self, account_key):
+        self.data.pop(account_key, None)
+        self.save()
+
+
+uid_state = UidState(MAIL_UID_STATE_FILE)
+
+
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     """Handles static files and proxies /api/* requests to Vegvesen."""
 
@@ -333,22 +584,29 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
                 ctx = ssl.create_default_context()
 
-                for dy in range(grid_size):
-                    for dx in range(grid_size):
-                        tx = x_tile - half + dx
-                        ty = y_tile - half + dy
-                        tile_url = f'https://mt1.google.com/vt/lyrs=s&x={tx}&y={ty}&z={zoom}'
+                def fetch_tile(dx_dy):
+                    dx, dy = dx_dy
+                    tx = x_tile - half + dx
+                    ty = y_tile - half + dy
+                    tile_url = f'https://mt1.google.com/vt/lyrs=s&x={tx}&y={ty}&z={zoom}'
+                    req = urllib.request.Request(tile_url)
+                    req.add_header('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
+                    try:
+                        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                            return (dx, dy, resp.read())
+                    except Exception:
+                        return (dx, dy, None)
 
-                        req = urllib.request.Request(tile_url)
-                        req.add_header('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
-
+                coords = [(dx, dy) for dy in range(grid_size) for dx in range(grid_size)]
+                with ThreadPoolExecutor(max_workers=10) as pool:
+                    for dx, dy, tile_data in pool.map(fetch_tile, coords):
+                        if not tile_data:
+                            continue
                         try:
-                            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-                                tile_data = resp.read()
-                                tile_img = PILImage.open(io.BytesIO(tile_data))
-                                result_img.paste(tile_img, (dx * tile_size, dy * tile_size))
+                            tile_img = PILImage.open(io.BytesIO(tile_data))
+                            result_img.paste(tile_img, (dx * tile_size, dy * tile_size))
                         except Exception:
-                            pass  # Skip failed tiles
+                            pass
 
                 buf = io.BytesIO()
                 result_img.save(buf, format='PNG')
@@ -465,7 +723,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
             try:
                 # 1. Fetch new emails since last fetch (using days_int) from IMAP
-                newly_fetched = self._fetch_flagged_emails(user_email, pwd, days_back=days_int)
+                newly_fetched = self._fetch_flagged_emails(user_email, pwd, days_back=days_int, account_key=account_key)
                 
                 # 2. Add to persistent cache (this also saves to disk)
                 # Note: account_key is used here to group emails in the cache
@@ -600,25 +858,61 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             print(f'  ❌ Feil ved sending: {e}')
             self._send_json({'error': f'Kunne ikke sende e-post: {str(e)}'}, 500)
 
-    def _fetch_flagged_emails(self, username, password, days_back=30):
-        """Connect to One.com IMAP and fetch relevant emails from last N days."""
+    def _fetch_flagged_emails(self, username, password, days_back=30, account_key=None):
+        """Connect to One.com IMAP and fetch relevant emails.
+
+        Bruker inkrementell UID-fetch når mulig: bare nye meldinger siden
+        forrige gjennomgang. UIDVALIDITY-endring → full rescan innenfor days_back.
+        """
         imap_host = 'imap.one.com'
         imap_port = 993
 
-        # Calculate date filter
         since_date = (datetime.now() - timedelta(days=days_back)).strftime('%d-%b-%Y')
+        state_key = account_key or username
 
         mail = imaplib.IMAP4_SSL(imap_host, imap_port)
         try:
             mail.login(username, password)
-            mail.select('INBOX', readonly=True)
-
-            # Search ALL emails since date
-            status, msg_ids = mail.search(None, f'(SINCE {since_date})')
-            if status != 'OK' or not msg_ids[0]:
+            status, select_data = mail.select('INBOX', readonly=True)
+            if status != 'OK':
                 return []
 
-            id_list = msg_ids[0].split()
+            # Hent UIDVALIDITY for å oppdage mailboks-rotasjon
+            current_uidvalidity = None
+            try:
+                status, uv = mail.response('UIDVALIDITY')
+                if uv and uv[0]:
+                    current_uidvalidity = int(uv[0])
+            except Exception:
+                pass
+
+            prev_state = uid_state.get(state_key)
+            prev_uidvalidity = prev_state.get('uidvalidity')
+            prev_last_uid = prev_state.get('last_uid', 0)
+
+            # Avgjør søkemåte: inkrementell UID-range eller full SINCE
+            id_list = []
+            use_uid = False
+            if current_uidvalidity and prev_uidvalidity == current_uidvalidity and prev_last_uid > 0:
+                # Inkrementell: bare nye UID-er
+                status, msg_ids = mail.uid('SEARCH', None, f'UID {prev_last_uid + 1}:*')
+                if status == 'OK' and msg_ids[0]:
+                    id_list = msg_ids[0].split()
+                    use_uid = True
+                    print(f'  🔁 Inkrementell IMAP: UID > {prev_last_uid} → {len(id_list)} nye')
+                else:
+                    print(f'  🔁 Inkrementell IMAP: ingen nye siden UID {prev_last_uid}')
+            else:
+                status, msg_ids = mail.search(None, f'(SINCE {since_date})')
+                if status == 'OK' and msg_ids[0]:
+                    id_list = msg_ids[0].split()
+                print(f'  🔎 Full SINCE-search: {len(id_list)} e-poster siden {since_date}')
+
+            if not id_list:
+                if current_uidvalidity:
+                    uid_state.update(state_key, current_uidvalidity, prev_last_uid)
+                return []
+
             emails = []
 
             # --- BLOCKED DOMAINS (checked on headers only) ---
@@ -664,14 +958,23 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 'breem', 'takprodukter', 'finér',
             ]
 
-            print(f'  📬 Found {len(id_list)} emails since {since_date}')
-
             # ========== PASS 1: Fetch HEADERS ONLY (fast) ==========
             # This avoids downloading full email bodies + attachments for spam
             candidates = []
+            max_seen_uid = prev_last_uid
+            fetch_cmd = mail.uid if use_uid else mail.fetch
             for msg_id in id_list:
                 try:
-                    status, hdr_data = mail.fetch(msg_id, '(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])')
+                    if use_uid:
+                        status, hdr_data = mail.uid('FETCH', msg_id, '(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])')
+                        try:
+                            uid_int = int(msg_id)
+                            if uid_int > max_seen_uid:
+                                max_seen_uid = uid_int
+                        except Exception:
+                            pass
+                    else:
+                        status, hdr_data = mail.fetch(msg_id, '(BODY[HEADER.FIELDS (FROM SUBJECT DATE)])')
                     if status != 'OK':
                         continue
 
@@ -720,35 +1023,35 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             # ========== PASS 2: Fetch FULL BODY only for candidates ==========
             for cand in candidates:
                 try:
-                    status, msg_data = mail.fetch(cand['msg_id'], '(RFC822)')
+                    if use_uid:
+                        status, msg_data = mail.uid('FETCH', cand['msg_id'], '(RFC822)')
+                    else:
+                        status, msg_data = mail.fetch(cand['msg_id'], '(RFC822)')
                     if status != 'OK':
                         continue
 
                     raw_email = msg_data[0][1]
                     msg = email_lib.message_from_bytes(raw_email)
 
-                    # Extract body text
-                    body = self._extract_body(msg, max_chars=5000)
+                    body = self._extract_body(msg, max_chars=8000)
 
-                    # Keyword matching on combined text
-                    combined_text = (cand['subject'] + ' ' + body).lower()
-                    for noise in ['christiania oppmerking as', 'christiania oppmerking',
-                                  'post@christianiaoppmerking.no', 'knut@christianiaoppmerking.no',
-                                  'www.christianiaoppmerking.no', 'christianiaoppmerking.no',
-                                  'reset your password', 'glemt passord', 'velkommen som bruker',
-                                  'doffin.no', 'mercell.com']:
-                        combined_text = combined_text.replace(noise, '')
-
-                    matched_keywords = [kw for kw in QUOTE_KEYWORDS if kw in combined_text]
-                    if not matched_keywords:
+                    # Smart klassifisering (score-basert)
+                    score, reasons, is_candidate = classify_email(
+                        cand['subject'], body, cand['from_name'], cand['from_email']
+                    )
+                    if not is_candidate:
                         continue
 
-                    # Generate stable reference ID
-                    stable_hash = hashlib.md5(f"{cand['from_email']}:{cand['subject']}:{cand['date']}".encode()).hexdigest().upper()
+                    # Strukturert info-uttrekk
+                    extracted = extract_info(body, cand['subject'], cand['from_name'], cand['from_email'])
+
+                    stable_hash = hashlib.md5(
+                        f"{cand['from_email']}:{cand['subject']}:{cand['date']}".encode()
+                    ).hexdigest().upper()
                     ref_id = stable_hash[:4]
 
                     emails.append({
-                        'id': cand['msg_id'].decode(),
+                        'id': cand['msg_id'].decode() if isinstance(cand['msg_id'], bytes) else str(cand['msg_id']),
                         'ref': ref_id,
                         'subject': cand['subject'],
                         'from_name': cand['from_name'],
@@ -757,17 +1060,32 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                         'body_preview': body[:500] + ('...' if len(body) > 500 else ''),
                         'full_body': body,
                         'is_quote_request': True,
-                        'matched_keywords': matched_keywords,
-                        'images': [],  # Skip image extraction for speed
+                        'score': score,
+                        'reasons': reasons,
+                        'extracted': extracted,
+                        'images': [],
                     })
 
                 except Exception as e:
                     print(f'  Warning: Could not parse email {cand["msg_id"]}: {e}')
                     continue
 
-            print(f'  🎯 Pass 2 done: {len(emails)} quote requests found')
+            print(f'  🎯 Pass 2 done: {len(emails)} quote requests found (avg score {sum(e["score"] for e in emails)/max(len(emails),1):.1f})')
 
-            # Sort by date, newest first
+            # Persist UID-state for neste inkrementelle henting
+            if current_uidvalidity and use_uid and max_seen_uid > prev_last_uid:
+                uid_state.update(state_key, current_uidvalidity, max_seen_uid)
+            elif current_uidvalidity and not use_uid and id_list:
+                # Ved full rescan – sett last_uid til høyeste sette sekvens-ID via UID SEARCH ALL
+                try:
+                    st, uids = mail.uid('SEARCH', None, 'ALL')
+                    if st == 'OK' and uids[0]:
+                        uid_list = [int(u) for u in uids[0].split()]
+                        if uid_list:
+                            uid_state.update(state_key, current_uidvalidity, max(uid_list))
+                except Exception:
+                    pass
+
             emails.sort(key=lambda x: x.get('date', ''), reverse=True)
             return emails
 
