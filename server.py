@@ -12,6 +12,7 @@ import json
 import os
 import hashlib
 import sys
+from concurrent.futures import ThreadPoolExecutor
 import ssl
 import imaplib
 import email as email_lib
@@ -56,6 +57,7 @@ for i in range(1, 5):
 
 # File for local email cache
 MAIL_CACHE_FILE = os.path.join(STATIC_DIR, 'mail_cache.json')
+BLOCKED_SENDERS_FILE = os.path.join(STATIC_DIR, 'blocked_senders.json')
 
 class MailCache:
     """Handles local persistence of flagged emails to avoid repeated IMAP fetches."""
@@ -106,6 +108,16 @@ class MailCache:
             self.save()
         return added_count
 
+    def remove_by_domain(self, domain):
+        """Remove cached emails from a blocked domain."""
+        domain = domain.lower()
+        to_delete = [k for k, v in self.data.items() if domain in v.get('from_email', '').lower()]
+        for key in to_delete:
+            del self.data[key]
+        if to_delete:
+            self.save()
+        return len(to_delete)
+
     def _cleanup(self, max_days=90):
         """Removes entries older than max_days."""
         cutoff = datetime.now() - timedelta(days=max_days)
@@ -113,9 +125,8 @@ class MailCache:
         for key, email in self.data.items():
             try:
                 date_str = email.get('date', '')
-                if 'T' in date_str: # ISO format
+                if 'T' in date_str:
                     email_date = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                    # Make cutoff offset-aware if email_date is offset-aware
                     if email_date.tzinfo and not cutoff.tzinfo:
                         from datetime import timezone
                         cutoff_tz = cutoff.replace(tzinfo=timezone.utc)
@@ -132,8 +143,63 @@ class MailCache:
         if to_delete:
             print(f"DEBUG: Cleaned up {len(to_delete)} old email entries from cache.")
 
-# Initialize global cache
+
+class BlockedSenders:
+    """Dynamic blocklist that persists to JSON. Users can add domains at runtime."""
+    def __init__(self, filepath):
+        self.filepath = filepath
+        self.data = self._load()
+
+    def _load(self):
+        if os.path.exists(self.filepath):
+            try:
+                with open(self.filepath, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {'domains': [], 'emails': []}
+
+    def save(self):
+        try:
+            with open(self.filepath, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"DEBUG: Could not save blocked senders: {e}")
+
+    def block_domain(self, domain):
+        domain = domain.lower().strip()
+        if domain and domain not in self.data['domains']:
+            self.data['domains'].append(domain)
+            self.save()
+            return True
+        return False
+
+    def block_email(self, email_addr):
+        email_addr = email_addr.lower().strip()
+        if email_addr and email_addr not in self.data['emails']:
+            self.data['emails'].append(email_addr)
+            self.save()
+            return True
+        return False
+
+    def is_blocked(self, from_email):
+        from_email = from_email.lower()
+        # Check exact email match
+        if from_email in self.data.get('emails', []):
+            return True
+        # Check domain match
+        for d in self.data.get('domains', []):
+            if d in from_email:
+                return True
+        return False
+
+    def get_all(self):
+        return self.data
+
+
+# Initialize global cache and blocklist
 mail_cache = MailCache(MAIL_CACHE_FILE)
+blocked_senders = BlockedSenders(BLOCKED_SENDERS_FILE)
 
 # Keywords that suggest an email is a quote request for marking work
 QUOTE_KEYWORDS = [
@@ -191,6 +257,8 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         """Handle POST requests."""
         if self.path.startswith('/mail/send'):
             self._handle_send_mail()
+        elif self.path.startswith('/mail/block'):
+            self._handle_block_sender()
         else:
             self.send_response(404)
             self._add_cors_headers()
@@ -413,7 +481,40 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'error': f'Feil ved henting av e-post for {user_email}: {str(e)}'}, 500)
             return
 
+        if path == '/mail/blocked':
+            self._send_json(blocked_senders.get_all())
+            return
+
         self._send_json({'error': 'Ukjent mail-endepunkt'}, 404)
+
+    def _handle_block_sender(self):
+        """Handle POST /mail/block – block a domain or email from future results."""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body.decode('utf-8'))
+
+            domain = data.get('domain', '')
+            email_addr = data.get('email', '')
+
+            results = {'blocked_domains': [], 'blocked_emails': [], 'removed_cached': 0}
+
+            if domain:
+                blocked_senders.block_domain(domain)
+                results['blocked_domains'].append(domain)
+                # Also remove from cache
+                removed = mail_cache.remove_by_domain(domain)
+                results['removed_cached'] = removed
+
+            if email_addr:
+                blocked_senders.block_email(email_addr)
+                results['blocked_emails'].append(email_addr)
+
+            print(f"  🚫 Blocked: domain={domain} email={email_addr} (removed {results['removed_cached']} cached)")
+            self._send_json({'success': True, **results})
+
+        except Exception as e:
+            self._send_json({'error': f'Block error: {str(e)}'}, 500)
 
     def _handle_send_mail(self):
         """Handle POST /mail/send – send an email with PDF attachment via SMTP."""
@@ -584,9 +685,11 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                     from_raw = hdr_msg.get('From', '')
                     from_name, from_email_addr = self._parse_from(from_raw)
 
-                    # Quick domain check
+                    # Quick domain check (static + dynamic blocklist)
                     email_lower = from_email_addr.lower()
                     if any(d in email_lower for d in skip_domains):
+                        continue
+                    if blocked_senders.is_blocked(email_lower):
                         continue
 
                     # Decode subject

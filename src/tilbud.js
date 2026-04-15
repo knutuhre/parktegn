@@ -1281,9 +1281,28 @@ async function fetchFromCheckedAccounts() {
     }
 
     try {
-        // Fetch from all checked accounts in parallel
+        // Show progress per account
+        const loadingText = $('#email-loading-text');
+        const loadingProgress = $('#email-loading-progress');
+        const totalAccounts = accounts.length;
+        let completed = 0;
+
+        if (loadingText) loadingText.textContent = `Henter e-poster fra ${totalAccounts} konto${totalAccounts > 1 ? 'er' : ''}...`;
+        if (loadingProgress) loadingProgress.textContent = `Kobler til e-postserver...`;
+
+        // Fetch from all checked accounts in parallel with progress tracking
         const results = await Promise.allSettled(
-            accounts.map(accKey => fetchSingleAccount(accKey, days))
+            accounts.map(async (accKey) => {
+                if (loadingProgress) {
+                    loadingProgress.textContent = `Søker i ${accounts.filter((_, i) => i >= completed).join(', ')}...`;
+                }
+                const result = await fetchSingleAccount(accKey, days);
+                completed++;
+                if (loadingProgress) {
+                    loadingProgress.textContent = `✅ ${accKey} ferdig (${completed}/${totalAccounts})`;
+                }
+                return result;
+            })
         );
 
         if (loading) loading.style.display = 'none';
@@ -1499,6 +1518,7 @@ function createEmailCard(mail) {
         ` : ''}
         <div class="email-card-actions">
             ${!status ? `
+                <button class="email-block-btn" title="Blokker alle e-poster fra dette domenet" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;">🚫 Blokker avsender</button>
                 <button class="email-not-job-btn" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#ef4444; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:500;">❌ Ikke oppdrag</button>
                 <button class="email-quote-btn">📝 Lag tilbud</button>
                 <button class="email-priced-btn" style="background:rgba(5,150,105,0.1); border:1px solid rgba(5,150,105,0.3); color:#059669; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:500;">✅ Priset</button>
@@ -1517,7 +1537,43 @@ function createEmailCard(mail) {
         });
     }
 
-    // "Ikke oppdrag" button
+    // "Blokker avsender" button — blocks the entire domain on the server
+    const blockBtn = card.querySelector('.email-block-btn');
+    if (blockBtn) {
+        blockBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const domain = (mail.from_email || '').split('@')[1] || '';
+            if (!domain) return;
+            
+            const ok = confirm(`Blokker alle e-poster fra "${domain}"?\n\nDette vil permanent filtrere bort alle fremtidige e-poster fra dette domenet.`);
+            if (!ok) return;
+            
+            try {
+                const baseUrl = window.location.origin;
+                const resp = await fetch(`${baseUrl}/mail/block`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain })
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    // Remove all emails from this domain from the current list
+                    cachedEmails = cachedEmails.filter(m => {
+                        const d = (m.from_email || '').split('@')[1] || '';
+                        return d.toLowerCase() !== domain.toLowerCase();
+                    });
+                    renderEmailList(cachedEmails);
+                    updateEmailBadge(cachedEmails.filter(m => !isEmailHandled(m)).length);
+                    console.log(`Blocked domain: ${domain}, removed ${result.removed_cached} cached`);
+                }
+            } catch (err) {
+                console.error('Block error:', err);
+                alert('Kunne ikke blokkere avsender. Prøv igjen.');
+            }
+        });
+    }
+
+    // "Ikke oppdrag" button — marks locally
     const notJobBtn = card.querySelector('.email-not-job-btn');
     if (notJobBtn) {
         notJobBtn.addEventListener('click', (e) => {
