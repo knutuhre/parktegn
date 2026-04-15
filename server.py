@@ -533,10 +533,6 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'error': 'Mangler mottaker-e-post'}, 400)
                 return
 
-            if not pdf_base64:
-                self._send_json({'error': 'Mangler PDF-data'}, 400)
-                return
-
             # Use 'post' account for sending
             if 'post' not in MAIL_ACCOUNTS:
                 self._send_json({'error': 'post@-kontoen er ikke konfigurert'}, 500)
@@ -562,11 +558,12 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             # Body text
             msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
 
-            # PDF attachment
-            pdf_bytes = base64.b64decode(pdf_base64)
-            pdf_part = MIMEApplication(pdf_bytes, _subtype='pdf')
-            pdf_part.add_header('Content-Disposition', 'attachment', filename=pdf_filename)
-            msg.attach(pdf_part)
+            # PDF attachment (optional)
+            if pdf_base64:
+                pdf_bytes = base64.b64decode(pdf_base64)
+                pdf_part = MIMEApplication(pdf_bytes, _subtype='pdf')
+                pdf_part.add_header('Content-Disposition', 'attachment', filename=pdf_filename)
+                msg.attach(pdf_part)
 
             # Custom attachments
             custom_attachments = data.get('custom_attachments', [])

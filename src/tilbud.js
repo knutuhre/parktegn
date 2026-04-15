@@ -12,6 +12,9 @@ const CURRENT_YEAR = new Date().getFullYear();
 const yearsDiff = CURRENT_YEAR - PRICE_BASE_YEAR;
 const ADJUSTMENT_FACTOR = Math.pow(1 + ANNUAL_ADJUSTMENT_PCT / 100, yearsDiff);
 
+// URL til kundebestillings-applikasjonen (for synergier)
+const CUSTOMER_APP_URL = 'https://bestilling.christianiaoppmerking.no'; // Oppdater denne hvis URL-en er annerledes
+
 // ===== Product Data (Prisliste 2026 - Formatert) =====
 // Prices are 2026 eks. MVA — adjusted to current year automatically
 const PRODUCTS_RAW = [
@@ -1520,6 +1523,7 @@ function createEmailCard(mail) {
             ${!status ? `
                 <button class="email-block-btn" title="Blokker alle e-poster fra dette domenet" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;">🚫 Blokker avsender</button>
                 <button class="email-not-job-btn" style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#ef4444; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:500;">❌ Ikke oppdrag</button>
+                <button class="email-send-skjema-btn" title="Send bestillingsskjema til kunden" style="background:rgba(167,139,250,0.15); border:1px solid rgba(167,139,250,0.4); color:#7c3aed; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;">📋 Send skjema</button>
                 <button class="email-quote-btn">📝 Lag tilbud</button>
                 <button class="email-priced-btn" style="background:rgba(5,150,105,0.1); border:1px solid rgba(5,150,105,0.3); color:#059669; padding:6px 12px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:500;">✅ Priset</button>
             ` : `
@@ -1569,6 +1573,77 @@ function createEmailCard(mail) {
             } catch (err) {
                 console.error('Block error:', err);
                 alert('Kunne ikke blokkere avsender. Prøv igjen.');
+            }
+        });
+    }
+
+    // "Send bestillingsskjema" button — sends a magic link to the customer app
+    const sendSkjemaBtn = card.querySelector('.email-send-skjema-btn');
+    if (sendSkjemaBtn) {
+        sendSkjemaBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const toEmail = mail.from_email;
+            if (!toEmail) {
+                alert('Mangler e-postadresse til avsender.');
+                return;
+            }
+
+            // Detect customer/firm from sender metadata
+            const senderLower = ((mail.from_name || '') + ' ' + (mail.from_email || '') + ' ' + (mail.subject || '')).toLowerCase();
+            const emailDomain = ((mail.from_email || '').split('@')[1] || '').toLowerCase();
+            let firma = '';
+            if (senderLower.includes('aimo') || emailDomain.includes('aimo')) firma = 'Aimo Park';
+            else if (senderLower.includes('park nordic') || senderLower.includes('parknordic') || emailDomain.includes('parknordic')) firma = 'Park Nordic';
+
+            const navn = mail.from_name || '';
+            const omraade = mail.subject || '';
+
+            // Construct pre-filled link to customer ordering app
+            const linkParams = new URLSearchParams({
+                import: '1',
+                navn: navn,
+                firma: firma,
+                omraade: omraade
+            });
+            const link = `${CUSTOMER_APP_URL}/?${linkParams.toString()}`;
+
+            const ok = confirm(`Send bestillingsskjema til ${toEmail}?\n\nKunden får en e-post med lenke som er ferdig utfylt med info fra forespørselen.`);
+            if (!ok) return;
+
+            sendSkjemaBtn.disabled = true;
+            sendSkjemaBtn.textContent = '⏳ Sender...';
+
+            try {
+                const bodyText = `Hei!\n\nTakk for din forespørsel angående "${omraade}".\n\nFor at vi skal kunne gi deg et nøyaktig tilbud raskest mulig, ber vi deg fylle ut vårt digitale bestillingsskjema. Her kan du tegne inn ønsket merking i kartet og spesifisere antall plasser:\n\n${link}\n\nDette sparer oss for tid og sikrer at vi får med alle detaljer korrekt.\n\nMed vennlig hilsen,\nChristiania Oppmerking AS\npost@christianiaoppmerking.no`;
+
+                const baseUrl = window.location.origin;
+                const resp = await fetch(`${baseUrl}/mail/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to_email: toEmail,
+                        subject: `Bestillingsskjema – ${omraade}`,
+                        body_text: bodyText,
+                        pdf_base64: '',
+                        pdf_filename: ''
+                    })
+                });
+
+                const result = await resp.json();
+                if (result.success) {
+                    alert(`✅ Bestillingsskjema sendt til ${toEmail}!`);
+                    sendSkjemaBtn.textContent = '✅ Sendt';
+                    sendSkjemaBtn.style.background = 'rgba(5,150,105,0.15)';
+                    sendSkjemaBtn.style.color = '#059669';
+                    sendSkjemaBtn.style.borderColor = 'rgba(5,150,105,0.4)';
+                } else {
+                    throw new Error(result.error || 'Ukjent feil');
+                }
+            } catch (err) {
+                console.error('Send skjema error:', err);
+                alert('Kunne ikke sende skjema: ' + err.message);
+                sendSkjemaBtn.disabled = false;
+                sendSkjemaBtn.textContent = '📋 Send skjema';
             }
         });
     }
